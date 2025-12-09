@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Cytophage: Умный Обход и Имена</title>
+
+    <style>
+
+        /* CSS-Стили */
+
+        body {
+
+            margin: 0;
+
+            overflow: hidden;
+
+            background-color: #000;
+
+        }
+
+        canvas {
+
+            display: block;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <canvas id="antistressCanvas"></canvas>
+
+
+
+    <script>
+
+
+        // --- МАССИВ ИМЕН ДЛЯ БАКТЕРИЙ ---
+
+        const NAMES_LIST = [
+
+            "Leonardo DiCaprio", "Brad Pitt", "Johnny Depp", "Tom Hardy", "Christian Bale", 
+
+            "Joaquin Phoenix", "Robert De Niro", "Al Pacino", "Gary Oldman", "Matt Damon", 
+
+            "Ben Affleck", "George Clooney", "Keanu Reeves", "Hugh Jackman", "Ryan Gosling", 
+
+            "Ryan Reynolds", "Jake Gyllenhaal", "Edward Norton", "Samuel L. Jackson", "Denzel Washington", 
+
+            "Morgan Freeman", "Tom Hanks", "Chris Hemsworth", "Chris Evans", "Chris Pratt", 
+
+            "Mark Ruffalo", "Benedict Cumberbatch", "Martin Freeman", "Daniel Day-Lewis", "Colin Firth", 
+
+            "Ewan McGregor", "Liam Neeson", "Jude Law", "Russell Crowe", "Javier Bardem", 
+
+            "Antonio Banderas", "Penélope Cruz", "Marion Cotillard", "Gérard Depardieu", "Vincent Cassel", 
+
+            "Mads Mikkelsen", "Viggo Mortensen", "Michael Fassbender", "Daniel Brühl", "Christoph Waltz", 
+
+            "Arnold Schwarzenegger", "Sylvester Stallone", "Jason Statham", "Jackie Chan", "Jet Li", 
+
+            "Chow Yun-Fat", "Donnie Yen", "Ken Watanabe", "Tadanobu Asano", "Song Kang-ho", 
+
+            "Lee Byung-hun", "Mahershala Ali", "Idris Elba", "Chiwetel Ejiofor", "Forest Whitaker", 
+
+            "Willem Dafoe", "Adam Driver", "Oscar Isaac", "Andrew Garfield", "Tobey Maguire", 
+
+            "Tom Holland", "Timothée Chalamet", "Austin Butler", "Bill Skarsgård", "Alexander Skarsgård", 
+
+            "Stellan Skarsgård", "Henry Cavill", "Ben Kingsley", "Dev Patel", "Riz Ahmed", 
+
+            "Gael García Bernal", "Diego Luna", "Wagner Moura", "Pedro Pascal", "Taika Waititi"
+
+        ];
+
+
+        // --- КОНСТАНТЫ, CANVAS И МИР ---
+
+        const canvas = document.getElementById('antistressCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+
+        const WORLD_WIDTH = 8000;
+        const WORLD_HEIGHT = 8000;
+
+        // Камера: x, y — координаты верхнего левого угла в мировых координатах
+        const camera = {
+            x: 0,
+            y: 0,
+            scale: 1
+        };
+
+        function clampCamera() {
+            const viewWidth = canvas.width / camera.scale;
+            const viewHeight = canvas.height / camera.scale;
+
+            const maxX = Math.max(0, WORLD_WIDTH - viewWidth);
+            const maxY = Math.max(0, WORLD_HEIGHT - viewHeight);
+
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > maxX) camera.x = maxX;
+            if (camera.y > maxY) camera.y = maxY;
+        }
+
+        function centerCameraOn(x, y) {
+            camera.x = x - canvas.width / (2 * camera.scale);
+            camera.y = y - canvas.height / (2 * camera.scale);
+            clampCamera();
+        }
+
+        function worldToScreen(x, y) {
+            return {
+                x: (x - camera.x) * camera.scale,
+                y: (y - camera.y) * camera.scale
+            };
+        }
+
+const foodArray = [];
+
+        const bacteriaArray = [];
+
+        // Расчёт количества еды так, чтобы плотность была примерно как раньше на экране,
+        // но с учётом размера всего мира. Есть верхний лимит, чтобы не перегружать браузер.
+        const BASE_VIEW_WIDTH = canvas.width || window.innerWidth || 1920;
+        const BASE_VIEW_HEIGHT = canvas.height || window.innerHeight || 1080;
+        const BASE_FOOD_DENSITY = 150 / (BASE_VIEW_WIDTH * BASE_VIEW_HEIGHT);
+// Увеличиваем плотность еды и поднимаем верхний лимит, чтобы её было заметно больше
+const FOOD_DENSITY_MULTIPLIER = 2.0;
+let foodCount = Math.min(15000, Math.floor(BASE_FOOD_DENSITY * WORLD_WIDTH * WORLD_HEIGHT * FOOD_DENSITY_MULTIPLIER));
+
+        let gameOverTimer = null; 
+
+        
+
+        function getDistance(p1, p2) {
+
+            const dx = p1.x - p2.x;
+
+            const dy = p1.y - p2.y;
+
+            return Math.sqrt(dx * dx + dy * dy);
+
+        }
+
+        
+
+        function getRandomName() {
+
+            return NAMES_LIST[Math.floor(Math.random() * NAMES_LIST.length)];
+
+        }
+
+
+
+
+
+        // --- Класс "Еда" (FoodParticle) ---
+
+        
+
+        function getRandomName() {
+            return NAMES_LIST[Math.floor(Math.random() * NAMES_LIST.length)];
+        }
+
+        // --- Класс "Еда" (FoodParticle) в больших мировых координатах ---
+
+        class FoodParticle {
+
+            constructor() {
+                this.size = Math.random() * 0.8 + 0.5;
+                this.x = Math.random() * (WORLD_WIDTH - 20) + 10;
+                this.y = Math.random() * (WORLD_HEIGHT - 20) + 10;
+                this.energyValue = 2;
+                this.color = 'hsl(120, 100%, 70%)';
+            }
+
+            draw() {
+                const p = worldToScreen(this.x, this.y);
+                const r = this.size * camera.scale;
+
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.shadowBlur = 2 * camera.scale;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // --- Класс "Бактерия Cytophage" (логика из оригинала, но в мире WORLD_*) ---
+
+class Cytophage {
+
+            constructor(x, y, size) {
+
+                this.size = size || 3; 
+
+                this.x = x || WORLD_WIDTH / 2;
+
+                this.y = y || WORLD_HEIGHT / 2;
+
+                this.maxSpeed = 2.5; 
+
+                this.speedX = (Math.random() - 0.5) * 0.5;
+
+                this.speedY = (Math.random() - 0.5) * 0.5;
+
+                this.acceleration = 0.15;
+
+                this.friction = 0.98;
+
+                
+
+                this.energy = 50; 
+
+                this.maxEnergy = 100;
+
+                this.visionRadius = 250; 
+
+                this.name = getRandomName(); // НОВОЕ: Случайное имя
+
+                
+
+                this.targetFood = null;
+
+            }
+
+            
+
+            findBestFood() {
+
+                let bestFood = null;
+                let minScore = Infinity;
+
+                for (const food of foodArray) {
+                    const distance = getDistance(this, food);
+
+                    if (distance < this.visionRadius) {
+                        let competitionPenalty = 0;
+                        const safeDistance = Math.max(distance, 0.1);
+
+                        for (const other of bacteriaArray) {
+                            if (other !== this) {
+                                const otherDistance = getDistance(other, food);
+
+                                if (otherDistance < distance) {
+                                    competitionPenalty += 10000;
+                                }
+
+                                if (other.targetFood === food) {
+                                    competitionPenalty += 500 / safeDistance;
+                                }
+                            }
+                        }
+
+                        const score = distance + competitionPenalty;
+
+                        if (score < minScore) {
+                            minScore = score;
+                            bestFood = food;
+                        }
+                    }
+                }
+
+                return bestFood;
+
+            }
+
+            
+
+            reproduce() {
+
+                const newSize = 3; 
+
+                const offset = this.size * 0.7; 
+
+                
+
+                const child1 = new Cytophage(this.x + offset, this.y, newSize);
+
+                const child2 = new Cytophage(this.x - offset, this.y, newSize);
+
+                
+
+                child1.energy = this.maxEnergy * 0.45;
+
+                child2.energy = this.maxEnergy * 0.45;
+
+                
+
+                bacteriaArray.push(child1);
+
+                bacteriaArray.push(child2);
+
+                
+
+                return true; 
+
+            }
+
+
+
+            // --- ОБНОВЛЕНО: Улучшенный Обход (Скольжение) ---
+
+            handleCompetition() {
+
+                let repelX = 0;
+
+                let repelY = 0;
+
+
+
+                for (const other of bacteriaArray) {
+
+                    if (other !== this) {
+
+                        const distance = getDistance(this, other);
+
+                        const minDistance = this.size + other.size;
+
+                        
+
+                        if (distance < minDistance * 2) { 
+
+                            const dx = this.x - other.x;
+
+                            const dy = this.y - other.y;
+
+                            
+
+                            const force = 0.8 * (1 - distance / (minDistance * 2)); 
+
+
+
+                            // Сила отталкивания
+
+                            repelX += dx * force;
+
+                            repelY += dy * force;
+
+                            
+
+                            // НОВОЕ: Сила для "скольжения" (перпендикулярная сила)
+
+                            // Это заставляет их огибать друг друга
+
+                            const slideForce = 0.5 * force;
+
+                            repelX += -dy * slideForce; 
+
+                            repelY += dx * slideForce;
+
+                        }
+
+                    }
+
+                }
+
+                this.speedX += repelX * 0.1;
+
+                this.speedY += repelY * 0.1;
+
+            }
+
+
+
+
+
+            update() {
+
+                this.energy -= 0.02 * (this.size / 3); 
+
+                
+
+                if (this.energy <= 0) return true; 
+
+
+
+                if (this.energy >= this.maxEnergy) {
+
+                    return this.reproduce();
+
+                }
+
+
+
+                this.handleCompetition();
+
+                
+
+                this.targetFood = this.findBestFood();
+
+                const target = this.targetFood;
+
+
+
+                if (target) {
+
+                    const dx = target.x - this.x;
+
+                    const dy = target.y - this.y; 
+
+                    
+
+                    const distance = getDistance(this, target);
+
+
+
+                    const targetSpeedX = (dx / distance) * this.maxSpeed;
+
+                    const targetSpeedY = (dy / distance) * this.maxSpeed;
+
+                    
+
+                    this.speedX += (targetSpeedX - this.speedX) * this.acceleration;
+
+                    this.speedY += (targetSpeedY - this.speedY) * this.acceleration;
+
+                } else {
+
+                    this.speedX += (Math.random() - 0.5) * 0.2;
+
+                    this.speedY += (Math.random() - 0.5) * 0.2;
+
+                    this.speedX *= this.friction;
+
+                    this.speedY *= this.friction;
+
+                }
+
+
+
+                const currentSpeed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY);
+
+                if (currentSpeed > this.maxSpeed) {
+
+                    this.speedX = (this.speedX / currentSpeed) * this.maxSpeed;
+
+                    this.speedY = (this.speedY / currentSpeed) * this.maxSpeed;
+
+                }
+
+
+
+                this.x += this.speedX;
+
+                this.y += this.speedY;
+
+
+
+                if (this.x + this.size > WORLD_WIDTH || this.x - this.size < 0) {
+
+                    this.speedX = -this.speedX * 0.9;
+
+                    this.x = (this.x < this.size) ? this.size : WORLD_WIDTH - this.size;
+
+                }
+
+                if (this.y + this.size > WORLD_HEIGHT || this.y - this.size < 0) {
+
+                    this.speedY = -this.speedY * 0.9;
+
+                    this.y = (this.y < this.size) ? this.size : WORLD_HEIGHT - this.size;
+
+                }
+
+                
+
+                this.size = 3 + (this.energy / this.maxEnergy) * 12; 
+
+
+
+                return false;
+
+            }
+
+
+
+            
+
+            draw() {
+
+                const p = worldToScreen(this.x, this.y);
+                const screenX = p.x;
+                const screenY = p.y;
+                const radius = this.size * camera.scale;
+
+                // 1. Тело Бактерии
+                const hue = 200 - (this.energy / this.maxEnergy) * 100;
+                this.color = 'hsl(' + hue + ', 90%, 60%)';
+
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+                ctx.shadowBlur = radius * 1.5;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // 2. Глаз
+                const eyeRadius = Math.max(0.8, this.size * 0.2) * camera.scale;
+                const angle = Math.atan2(this.speedY, this.speedX || 0.0001);
+                const eyeX = screenX + Math.cos(angle) * (radius - eyeRadius);
+                const eyeY = screenY + Math.sin(angle) * (radius - eyeRadius);
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                ctx.beginPath();
+                ctx.arc(eyeX, eyeY, eyeRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                const blinkSize = eyeRadius * 0.3;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.arc(eyeX - blinkSize * 0.5, eyeY - blinkSize * 0.5, blinkSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 3. Полоска энергии (HP-бар)
+                const barWidth = this.size * 2 * camera.scale;
+                const barHeight = 4 * camera.scale;
+                const barX = screenX - barWidth / 2;
+                const barY = screenY - radius - 10 * camera.scale;
+
+                ctx.fillStyle = 'rgba(50, 0, 0, 0.8)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                const energyPercentage = Math.max(0, this.energy / this.maxEnergy);
+                const energyBarWidth = barWidth * energyPercentage;
+
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+                ctx.fillRect(barX, barY, energyBarWidth, barHeight);
+
+                // 4. Имя над бактерией
+                ctx.fillStyle = 'white';
+                const fontSize = 10 * camera.scale;
+                ctx.font = fontSize + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, screenX, barY - 5 * camera.scale);
+            }
+        }
+
+function handleFood() {
+
+            for (let b = 0; b < bacteriaArray.length; b++) {
+
+                const bacterium = bacteriaArray[b];
+
+
+
+                for (let i = 0; i < foodArray.length; i++) {
+
+                    const food = foodArray[i];
+
+
+
+                    const distance = getDistance(bacterium, food);
+
+
+
+                    if (distance < bacterium.size) {
+
+                        bacterium.energy += food.energyValue * 1.5; 
+
+                        
+
+                        if (bacterium.targetFood === food) {
+
+                            bacterium.targetFood = null;
+
+                        }
+
+
+
+                        foodArray.splice(i, 1);
+
+                        i--;
+
+                        
+
+                        foodArray.push(new FoodParticle()); 
+
+                    }
+
+                }
+
+            }
+
+        }
+
+
+
+        
+
+        // --- ИНИЦИАЛИЗАЦИЯ И ГЛАВНЫЙ ЦИКЛ ---
+
+        function init() {
+
+            foodArray.length = 0;
+            bacteriaArray.length = 0;
+
+            for (let i = 0; i < foodCount; i++) {
+                foodArray.push(new FoodParticle());
+            }
+
+            const startX = WORLD_WIDTH / 2;
+            const startY = WORLD_HEIGHT / 2;
+
+            bacteriaArray.push(new Cytophage(startX, startY, 3));
+
+            camera.scale = 1;
+            centerCameraOn(startX, startY);
+
+            gameOverTimer = null;
+        }
+
+        function drawWorldBoundary() {
+            const topLeft = worldToScreen(0, 0);
+            const width = WORLD_WIDTH * camera.scale;
+            const height = WORLD_HEIGHT * camera.scale;
+
+            ctx.save();
+            ctx.strokeStyle = 'hsl(120, 100%, 70%)';
+            ctx.lineWidth = 4 * camera.scale;
+            ctx.strokeRect(topLeft.x, topLeft.y, width, height);
+            ctx.restore();
+        }
+
+        function animate() {
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawWorldBoundary();
+
+            handleFood();
+
+            for (let i = 0; i < bacteriaArray.length; i++) {
+                const bacterium = bacteriaArray[i];
+
+                if (bacterium.update()) {
+                    bacteriaArray.splice(i, 1);
+                    i--;
+                } else {
+                    bacterium.draw();
+                }
+            }
+
+            for (let i = 0; i < foodArray.length; i++) {
+                foodArray[i].draw();
+            }
+
+            if (bacteriaArray.length === 0) {
+
+                if (!gameOverTimer) {
+                    gameOverTimer = setTimeout(init, 5000);
+                }
+
+                ctx.fillStyle = 'white';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Все Cytophage погибли. Рестарт через 5 секунд...', canvas.width / 2, canvas.height / 2);
+
+            } else if (gameOverTimer) {
+                clearTimeout(gameOverTimer);
+                gameOverTimer = null;
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- УПРАВЛЕНИЕ КАМЕРОЙ: ПЕРЕМЕЩЕНИЕ И МАСШТАБ ---
+
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        canvas.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        window.addEventListener('mouseup', function() {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', function() {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+
+            camera.x -= dx / camera.scale;
+            camera.y -= dy / camera.scale;
+
+            clampCamera();
+        });
+
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const worldXBefore = mouseX / camera.scale + camera.x;
+            const worldYBefore = mouseY / camera.scale + camera.y;
+
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            let newScale = camera.scale * zoomFactor;
+
+            const minScale = 0.2;
+            const maxScale = 3;
+
+            if (newScale < minScale) newScale = minScale;
+            if (newScale > maxScale) newScale = maxScale;
+
+            camera.scale = newScale;
+
+            camera.x = worldXBefore - mouseX / camera.scale;
+            camera.y = worldYBefore - mouseY / camera.scale;
+
+            clampCamera();
+        }, { passive: false });
+
+        window.addEventListener('resize', function() {
+            resizeCanvas();
+            clampCamera();
+        });
+
+        init();
+        animate();
+
+    </script>
+
+
+</body>
+
+</html>
