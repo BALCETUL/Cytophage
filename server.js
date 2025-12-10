@@ -13,7 +13,7 @@ const EVENTS_FILE = path.join(__dirname, "events.log");
 // ---- WORLD SETTINGS ----
 const WORLD_WIDTH = 8000;
 const WORLD_HEIGHT = 8000;
-// больше еды в мире
+// сколько еды хотим поддерживать в мире
 const TARGET_FOOD_COUNT = 8000;
 const TICK_INTERVAL = 80; // ms
 const MS_PER_TICK = TICK_INTERVAL;
@@ -29,15 +29,15 @@ const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
 // голод (0–100)
-const MAX_HUNGER = 100;               // максимум 100 еды
-const BASE_HUNGER_DRAIN = 0.01;       // базовый расход за тик (довольно быстро голодают)
-const HUNGER_DRAIN_PER_SIZE = 0.00005; // расход от размера
-const FOOD_HUNGER_GAIN = 5;           // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 35;         // сколько голода тратится на ребёнка
+const MAX_HUNGER = 100;                 // максимум 100 еды
+const BASE_HUNGER_DRAIN = 0.01;         // базовый расход за тик
+const HUNGER_DRAIN_PER_SIZE = 0.00005;  // расход от размера
+const FOOD_HUNGER_GAIN = 5;             // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 35;           // сколько голода тратится на ребёнка
 
 // рост / размер
-const MAX_SIZE_POINTS = 1000;         // максимум "массы"
-const SIZE_GAIN_PER_FOOD = 1;         // сколько "массы" даёт одна еда
+const MAX_SIZE_POINTS = 1000;           // максимум "массы"
+const SIZE_GAIN_PER_FOOD = 1;           // сколько "массы" даёт одна еда
 
 // ---- RANDOM ----
 function randRange(min, max) {
@@ -158,12 +158,13 @@ class Cytophage {
     this.x = x;
     this.y = y;
 
-    this.vx = randRange(-0.1, 0.1);
-    this.vy = randRange(-0.1, 0.1);
+    // очень плавное движение
+    this.vx = randRange(-0.05, 0.05);
+    this.vy = randRange(-0.05, 0.05);
 
-    this.maxSpeed = 2.2;
-    this.acceleration = 0.12;
-    this.friction = 0.98;
+    this.maxSpeed = 1.0;      // ниже скорость
+    this.acceleration = 0.04; // мягкий поворот
+    this.friction = 0.985;    // сильнее инерция
 
     // возраст и жизнь
     this.ageTicks = ageTicks;
@@ -194,7 +195,7 @@ class Cytophage {
     this.sizePoints = sizePoints;
     this.maxSizePoints = MAX_SIZE_POINTS;
     this.size = 3;
-    // увеличиваем радиус зрения, чтобы лучше находили еду
+    // увеличенный радиус зрения, чтобы видеть еду дальше
     this.visionRadius = 450;
 
     // флаг лидера (определяется отдельно)
@@ -367,7 +368,6 @@ function distanceSq(ax, ay, bx, by) {
 
 // ---- FOOD LOGIC ----
 function maintainFood() {
-  // всегда поддерживаем плотность еды в мире
   while (foodArray.length < TARGET_FOOD_COUNT) {
     spawnFoodRandom();
   }
@@ -442,11 +442,11 @@ function handleSeparationAndFamily(b) {
     const dist = Math.sqrt(distSq);
     const minDist = (b.size + other.size) * 1.5;
 
-    // отталкивание
+    // отталкивание (очень мягкое)
     if (dist < minDist) {
       const nx = dx / dist;
       const ny = dy / dist;
-      const force = 0.8 * (1 - dist / (minDist * 2));
+      const force = 0.4 * (1 - dist / (minDist * 2)); // было ~0.8 — сделали мягче
       const slideForce = force * 0.5;
 
       repelX += nx * force;
@@ -460,7 +460,7 @@ function handleSeparationAndFamily(b) {
     if (other.familyId === b.familyId && dist > minDist && dist < 600) {
       const nx = -dx / dist;
       const ny = -dy / dist;
-      const famPull = 0.05 * (1 - dist / 600);
+      const famPull = 0.03 * (1 - dist / 600);
       repelX += nx * famPull;
       repelY += ny * famPull;
     }
@@ -480,13 +480,13 @@ function handleSeparationAndFamily(b) {
     const dist = leaderDist || 1;
     const nx = leaderVecX / dist;
     const ny = leaderVecY / dist;
-    const followStrength = 0.12;
+    const followStrength = 0.08; // чуть мягче следование
     b.vx += nx * followStrength;
     b.vy += ny * followStrength;
   }
 
-  b.vx += repelX * 0.1;
-  b.vy += repelY * 0.1;
+  b.vx += repelX * 0.08;
+  b.vy += repelY * 0.08;
 }
 
 function maybeReproduce(b, newChildren) {
@@ -521,7 +521,7 @@ function maybeReproduce(b, newChildren) {
     familyName,
     hunger: MAX_HUNGER * 0.6,
     lastBirthYear: 0,
-    sizePoints: Math.max(20, b.sizePoints * 0.5) // немного роста по наследству
+    sizePoints: Math.max(20, b.sizePoints * 0.5)
   });
 
   b.childrenCount += 1;
@@ -610,17 +610,19 @@ function updateBacteria() {
       const desiredVx = (dx / dist) * b.maxSpeed;
       const desiredVy = (dy / dist) * b.maxSpeed;
 
+      // очень мягко поворачиваем скорость в сторону еды
       b.vx += (desiredVx - b.vx) * b.acceleration;
       b.vy += (desiredVy - b.vy) * b.acceleration;
     } else {
-      // блуждание — чуть активнее, чтобы не "застывали"
-      b.vx += (Math.random() - 0.5) * 0.3;
-      b.vy += (Math.random() - 0.5) * 0.3;
-      b.vx *= b.friction;
-      b.vy *= b.friction;
+      // блуждание — очень мягкое, чтобы не дёргалось
+      b.vx += (Math.random() - 0.5) * 0.05;
+      b.vy += (Math.random() - 0.5) * 0.05;
     }
 
-    // лимит скорости
+    // трение и ограничение скорости
+    b.vx *= b.friction;
+    b.vy *= b.friction;
+
     const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     if (speed > b.maxSpeed) {
       b.vx = (b.vx / speed) * b.maxSpeed;
@@ -634,18 +636,18 @@ function updateBacteria() {
     // границы мира
     if (b.x < 0) {
       b.x = 0;
-      b.vx = Math.abs(b.vx) * 0.9;
+      b.vx = Math.abs(b.vx) * 0.5;
     } else if (b.x > world.width) {
       b.x = world.width;
-      b.vx = -Math.abs(b.vx) * 0.9;
+      b.vx = -Math.abs(b.vx) * 0.5;
     }
 
     if (b.y < 0) {
       b.y = 0;
-      b.vy = Math.abs(b.vy) * 0.9;
+      b.vy = Math.abs(b.vy) * 0.5;
     } else if (b.y > world.height) {
       b.y = world.height;
-      b.vy = -Math.abs(b.vy) * 0.9;
+      b.vy = -Math.abs(b.vy) * 0.5;
     }
 
     // размер зависит от возраста и накопленного роста (еды)
@@ -697,12 +699,10 @@ function tick() {
     return;
   }
 
-  // выбираем лидеров по возрасту
   updateFamilyLeaders();
-
   updateBacteria();
   handleEating();
-  maintainFood(); // поддерживаем количество еды
+  maintainFood();
 
   if (stats.tickCount % Math.round(1000 / TICK_INTERVAL) === 0) {
     saveState();
