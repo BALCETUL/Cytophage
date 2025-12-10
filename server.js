@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const https = require("https"); // ← ДОБАВЛЕНО для самопинга
 
 const app = express();
 app.use(cors());
@@ -13,32 +14,45 @@ const EVENTS_FILE = path.join(__dirname, "events.log");
 // ---- WORLD SETTINGS ----
 const WORLD_WIDTH = 8000;
 const WORLD_HEIGHT = 8000;
-// сколько еды хотим поддерживать в мире
 const TARGET_FOOD_COUNT = 8000;
 const TICK_INTERVAL = 80; // ms
 const MS_PER_TICK = TICK_INTERVAL;
 
-// 1 час (3600000 ms) = 1 "год" мира
 const MS_PER_YEAR = 60 * 60 * 1000;
 const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
 
-// возрастные границы (в "годах мира")
 const ADULT_AGE_YEARS = 18;
-const REPRO_MIN_AGE_YEARS = 0.5; // с этого возраста (Юный) можно давать потомство
+const REPRO_MIN_AGE_YEARS = 0.5;
 const BIRTH_COOLDOWN_YEARS = 5;
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
-// голод (0–100)
-const MAX_HUNGER = 100;                 // максимум 100 еды
-const BASE_HUNGER_DRAIN = 0.01;         // базовый расход за тик
-const HUNGER_DRAIN_PER_SIZE = 0.00005;  // расход от размера
-const FOOD_HUNGER_GAIN = 5;             // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 35;           // сколько голода тратится на ребёнка
+const MAX_HUNGER = 100;
+const BASE_HUNGER_DRAIN = 0.01;
+const HUNGER_DRAIN_PER_SIZE = 0.00005;
+const FOOD_HUNGER_GAIN = 5;
+const BIRTH_HUNGER_COST = 35;
 
-// рост / размер
-const MAX_SIZE_POINTS = 1000;           // максимум "массы"
-const SIZE_GAIN_PER_FOOD = 1;           // сколько "массы" даёт одна еда
+const MAX_SIZE_POINTS = 1000;
+const SIZE_GAIN_PER_FOOD = 1;
+
+// ---- САМОПИНГ (НОВОЕ) ----
+const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
+const PING_INTERVAL = 10 * 60 * 1000; // 10 минут
+let pingCount = 0;
+let lastPingTime = null;
+
+function selfPing() {
+  const pingTime = new Date().toISOString();
+  
+  https.get(`${SERVER_URL}/ping`, (res) => {
+    pingCount++;
+    lastPingTime = pingTime;
+    console.log(`✅ Self-ping #${pingCount} successful at ${pingTime} | Status: ${res.statusCode}`);
+  }).on('error', (e) => {
+    console.error(`❌ Self-ping failed at ${pingTime}:`, e.message);
+  });
+}
 
 // ---- RANDOM ----
 function randRange(min, max) {
@@ -159,21 +173,18 @@ class Cytophage {
     this.x = x;
     this.y = y;
 
-    // очень плавное движение
     this.vx = randRange(-0.05, 0.05);
     this.vy = randRange(-0.05, 0.05);
 
-    this.maxSpeed = 1.0;      // ниже скорость
-    this.acceleration = 0.04; // мягкий поворот
-    this.friction = 0.985;    // сильнее инерция
+    this.maxSpeed = 1.0;
+    this.acceleration = 0.04;
+    this.friction = 0.985;
 
-    // возраст и жизнь
     this.ageTicks = ageTicks;
     this.lifespanYears = lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS);
     this.lastBirthYear = lastBirthYear;
     this.childrenCount = childrenCount;
 
-    // семья
     if (familyId && familyColor && familyName) {
       this.familyId = familyId;
       this.familyColor = familyColor;
@@ -188,18 +199,14 @@ class Cytophage {
     this.generation = generation;
     this.parentId = parentId;
 
-    // голод
     this.hunger = hunger;
     this.maxHunger = MAX_HUNGER;
 
-    // размер и зрение
     this.sizePoints = sizePoints;
     this.maxSizePoints = MAX_SIZE_POINTS;
     this.size = 3;
-    // увеличенный радиус зрения, чтобы видеть еду дальше
     this.visionRadius = 450;
 
-    // флаг лидера (определяется отдельно)
     this.isLeader = false;
 
     stats.totalBorn += 1;
@@ -405,7 +412,6 @@ function findBestFoodFor(bacteria) {
     if (distSq > visionRadiusSq) continue;
     const dist = Math.sqrt(distSq);
 
-    // бонус к еде возле семьи
     let familyBonus = 0;
     for (const other of bacteriaArray) {
       if (other === bacteria) continue;
@@ -443,11 +449,10 @@ function handleSeparationAndFamily(b) {
     const dist = Math.sqrt(distSq);
     const minDist = (b.size + other.size) * 1.5;
 
-    // отталкивание (очень мягкое)
     if (dist < minDist) {
       const nx = dx / dist;
       const ny = dy / dist;
-      const force = 0.4 * (1 - dist / (minDist * 2)); // было ~0.8 — сделали мягче
+      const force = 0.4 * (1 - dist / (minDist * 2));
       const slideForce = force * 0.5;
 
       repelX += nx * force;
@@ -457,7 +462,6 @@ function handleSeparationAndFamily(b) {
       repelY += nx * slideForce;
     }
 
-    // притяжение к членам семьи (держатся вместе)
     if (other.familyId === b.familyId && dist > minDist && dist < 600) {
       const nx = -dx / dist;
       const ny = -dy / dist;
@@ -466,7 +470,6 @@ function handleSeparationAndFamily(b) {
       repelY += ny * famPull;
     }
 
-    // запоминаем лидера семьи
     if (other.familyId === b.familyId && other.isLeader) {
       if (dist < leaderDist) {
         leaderDist = dist;
@@ -476,12 +479,11 @@ function handleSeparationAndFamily(b) {
     }
   }
 
-  // следуем за лидером, если мы не лидер
   if (!b.isLeader && leaderDist < Infinity) {
     const dist = leaderDist || 1;
     const nx = leaderVecX / dist;
     const ny = leaderVecY / dist;
-    const followStrength = 0.08; // чуть мягче следование
+    const followStrength = 0.08;
     b.vx += nx * followStrength;
     b.vy += ny * followStrength;
   }
@@ -493,25 +495,19 @@ function handleSeparationAndFamily(b) {
 function maybeReproduce(b, newChildren) {
   const ageYears = b.ageYears;
 
-  // можно рожать, когда как минимум стадия "Юный" (0.5+ лет)
   if (ageYears < REPRO_MIN_AGE_YEARS) return;
-  // обязательно максимальный размер
   if ((b.sizePoints || 0) < (b.maxSizePoints || MAX_SIZE_POINTS)) return;
-  // должна быть почти полностью сыта
   if (b.hunger < MAX_HUNGER * 0.9) return;
-  // кулдаун между рождениями (в "годах")
   if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
   const offset = 10;
   const childX = b.x + randRange(-offset, offset);
   const childY = b.y + randRange(-offset, offset);
 
-  // по умолчанию ребёнок наследует клан родителя
   let familyId = b.familyId;
   let familyColor = b.familyColor;
   let familyName = b.familyName;
 
-  // если родитель — старейший (лидер), ребёнок выходит в новый клан с новым цветом
   if (b.isLeader) {
     const newFam = createFamily();
     familyId = newFam.familyId;
@@ -554,16 +550,13 @@ function updateBacteria() {
   const newChildren = [];
 
   for (const b of bacteriaArray) {
-    // возраст
     b.ageTicks += 1;
     const ageYears = b.ageYears;
 
-    // голод
     const hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
     b.hunger -= hungerDrain;
     if (b.hunger < 0) b.hunger = 0;
 
-    // смерть от голода
     if (b.hunger <= 0) {
       deadIds.add(b.id);
       stats.totalDied += 1;
@@ -581,7 +574,6 @@ function updateBacteria() {
       continue;
     }
 
-    // смерть от старости
     if (ageYears >= b.lifespanYears) {
       deadIds.add(b.id);
       stats.totalDied += 1;
@@ -600,13 +592,10 @@ function updateBacteria() {
       continue;
     }
 
-    // рождение
     maybeReproduce(b, newChildren);
 
-    // отталкивания, семья, лидер
     handleSeparationAndFamily(b);
 
-    // поиск еды
     const bestFood = findBestFoodFor(b);
     if (bestFood) {
       const dx = bestFood.x - b.x;
@@ -616,16 +605,13 @@ function updateBacteria() {
       const desiredVx = (dx / dist) * b.maxSpeed;
       const desiredVy = (dy / dist) * b.maxSpeed;
 
-      // очень мягко поворачиваем скорость в сторону еды
       b.vx += (desiredVx - b.vx) * b.acceleration;
       b.vy += (desiredVy - b.vy) * b.acceleration;
     } else {
-      // блуждание — очень мягкое, чтобы не дёргалось
       b.vx += (Math.random() - 0.5) * 0.05;
       b.vy += (Math.random() - 0.5) * 0.05;
     }
 
-    // трение и ограничение скорости
     b.vx *= b.friction;
     b.vy *= b.friction;
 
@@ -635,11 +621,9 @@ function updateBacteria() {
       b.vy = (b.vy / speed) * b.maxSpeed;
     }
 
-    // движение
     b.x += b.vx;
     b.y += b.vy;
 
-    // границы мира
     if (b.x < 0) {
       b.x = 0;
       b.vx = Math.abs(b.vx) * 0.5;
@@ -656,7 +640,6 @@ function updateBacteria() {
       b.vy = -Math.abs(b.vy) * 0.5;
     }
 
-    // размер зависит от возраста и накопленного роста (еды)
     const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
     const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
     const baseSize = 4 + youthFactor * 8 + foodFactor * 10;
@@ -680,10 +663,8 @@ function handleEating() {
       const eatRadius = b.size * 1.2;
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
-        // сытость
         b.hunger += FOOD_HUNGER_GAIN;
         if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
-        // рост от еды
         b.sizePoints = (b.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
         if (b.sizePoints > b.maxSizePoints) b.sizePoints = b.maxSizePoints;
       }
@@ -716,6 +697,19 @@ function tick() {
 }
 
 // ---- API ----
+// НОВЫЙ ENDPOINT для самопинга
+app.get("/ping", (req, res) => {
+  res.status(200).json({ 
+    status: 'alive',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    selfPingCount: pingCount,
+    lastSelfPing: lastPingTime,
+    bacteriaCount: bacteriaArray.length,
+    foodCount: foodArray.length
+  });
+});
+
 app.get("/state", (req, res) => {
   res.json({
     world,
@@ -748,7 +742,12 @@ app.get("/state", (req, res) => {
 });
 
 app.get("/stats", (req, res) => {
-  res.json(stats);
+  res.json({
+    ...stats,
+    uptime: process.uptime(),
+    selfPingCount: pingCount,
+    lastSelfPing: lastPingTime
+  });
 });
 
 // ---- START ----
@@ -758,4 +757,12 @@ setInterval(tick, TICK_INTERVAL);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Cytophage world server running on port ${PORT}`);
+  console.log(`Server URL: ${SERVER_URL}`);
+  
+  // Запуск самопинга через 2 минуты после старта
+  setTimeout(() => {
+    console.log('🚀 Self-ping system started');
+    selfPing(); // Первый пинг сразу
+    setInterval(selfPing, PING_INTERVAL); // Затем каждые 10 минут
+  }, 2 * 60 * 1000);
 });
