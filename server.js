@@ -6,18 +6,44 @@ const path = require("path");
 const app = express();
 app.use(cors());
 
+// ---- FILES ----
 const STATE_FILE = path.join(__dirname, "world_state.json");
 const EVENTS_FILE = path.join(__dirname, "events.log");
 
+// ---- WORLD SETTINGS ----
 const WORLD_WIDTH = 8000;
 const WORLD_HEIGHT = 8000;
 const TARGET_FOOD_COUNT = 4000;
-const TICK_INTERVAL = 80;
+const TICK_INTERVAL = 80; // ms
+const MS_PER_TICK = TICK_INTERVAL;
 
+// 1 час (3600000 ms) = 1 "год"
+const MS_PER_YEAR = 60 * 60 * 1000;
+const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
+
+// возрастные границы (в годах)
+const ADULT_AGE_YEARS = 18;
+const BIRTH_COOLDOWN_YEARS = 5;
+const MIN_LIFESPAN_YEARS = 60;
+const MAX_LIFESPAN_YEARS = 100;
+
+// голод
+const MAX_HUNGER = 1000;
+const BASE_HUNGER_DRAIN = 0.01; // за тик
+const HUNGER_DRAIN_PER_SIZE = 0.00002; // доп. расход от размера
+const FOOD_HUNGER_GAIN = 40; // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 300; // сколько голода тратится на рождение ребёнка
+
+// ---- RANDOM HELPERS ----
 function randRange(min, max) {
   return Math.random() * (max - min) + min;
 }
 
+function randInt(min, max) {
+  return Math.floor(randRange(min, max + 1));
+}
+
+// ---- NAMES LIST ----
 const NAMES_LIST = [
   "Leonardo DiCaprio","Brad Pitt","Johnny Depp","Tom Hardy","Christian Bale",
   "Joaquin Phoenix","Robert De Niro","Al Pacino","Gary Oldman","Matt Damon",
@@ -32,6 +58,17 @@ function getRandomName() {
   return NAMES_LIST[index];
 }
 
+// ---- FAMILY SYSTEM ----
+let nextFamilyId = 1;
+
+function createFamily() {
+  const id = nextFamilyId++;
+  const hue = randInt(0, 359);
+  const color = `hsl(${hue}, 80%, 60%)`;
+  return { familyId: id, familyColor: color };
+}
+
+// ---- GLOBAL STATE ----
 let world = {
   width: WORLD_WIDTH,
   height: WORLD_HEIGHT
@@ -51,6 +88,7 @@ let stats = {
   tickCount: 0
 };
 
+// ---- ENTITIES ----
 class FoodParticle {
   constructor(x, y) {
     this.id = nextFoodId++;
@@ -60,7 +98,18 @@ class FoodParticle {
 }
 
 class Cytophage {
-  constructor(x, y, generation = 0, parentId = null) {
+  constructor(x, y, options = {}) {
+    const {
+      generation = 0,
+      parentId = null,
+      familyId = null,
+      familyColor = null,
+      ageTicks = 0,
+      hunger = MAX_HUNGER * 0.5,
+      lifespanYears = null,
+      lastBirthYear = 0
+    } = options;
+
     this.id = nextBacteriaId++;
     this.name = getRandomName();
 
@@ -70,39 +119,71 @@ class Cytophage {
     this.vx = randRange(-0.1, 0.1);
     this.vy = randRange(-0.1, 0.1);
 
-    this.maxSpeed = 2.5;
-    this.acceleration = 0.15;
+    this.maxSpeed = 2.2;
+    this.acceleration = 0.12;
     this.friction = 0.98;
 
-    this.energy = 50;
-    this.maxEnergy = 100;
+    // возраст и жизнь
+    this.ageTicks = ageTicks;
+    this.lifespanYears = lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS);
+    this.lastBirthYear = lastBirthYear;
+    this.childrenCount = 0;
 
-    this.size = 3;
-    this.visionRadius = 250;
+    // семья
+    if (familyId && familyColor) {
+      this.familyId = familyId;
+      this.familyColor = familyColor;
+    } else {
+      const fam = createFamily();
+      this.familyId = fam.familyId;
+      this.familyColor = fam.familyColor;
+    }
 
-    this.ageTicks = 0;
     this.generation = generation;
     this.parentId = parentId;
+
+    // голод
+    this.hunger = hunger;
+    this.maxHunger = MAX_HUNGER;
+
+    // размер и зрение
+    this.size = 3;
+    this.visionRadius = 250;
 
     stats.totalBorn += 1;
     logEvent({
       type: "birth",
       id: this.id,
-      parentId: parentId,
-      generation: generation,
-      x: x,
-      y: y,
-      tick: stats.tickCount,
-      time: new Date().toISOString()
+      parentId: this.parentId,
+      generation: this.generation,
+      familyId: this.familyId,
+      familyColor: this.familyColor,
+      lifespanYears: this.lifespanYears,
+      time: new Date().toISOString(),
+      tick: stats.tickCount
     });
+  }
+
+  get ageYears() {
+    return this.ageTicks / TICKS_PER_YEAR;
+  }
+
+  get isAdult() {
+    return this.ageYears >= ADULT_AGE_YEARS;
+  }
+
+  get isJuvenile() {
+    return this.ageYears < ADULT_AGE_YEARS;
   }
 }
 
+// ---- PERSISTENCE ----
 function saveState() {
   const data = {
     world,
     nextBacteriaId,
     nextFoodId,
+    nextFamilyId,
     bacteria: bacteriaArray,
     food: foodArray,
     stats: {
@@ -132,26 +213,33 @@ function loadState() {
     world = data.world || world;
     nextBacteriaId = data.nextBacteriaId || 1;
     nextFoodId = data.nextFoodId || 1;
+    nextFamilyId = data.nextFamilyId || 1;
     stats = {
       ...stats,
       ...data.stats
     };
 
+    // restore bacteria with new schema
     bacteriaArray = (data.bacteria || []).map(b => {
-      const c = new Cytophage(b.x, b.y, b.generation || 0, b.parentId ?? null);
+      const opts = {
+        generation: b.generation ?? 0,
+        parentId: b.parentId ?? null,
+        familyId: b.familyId ?? null,
+        familyColor: b.familyColor ?? null,
+        ageTicks: b.ageTicks ?? 0,
+        hunger: typeof b.hunger === "number" ? b.hunger : MAX_HUNGER * 0.5,
+        lifespanYears: b.lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS),
+        lastBirthYear: b.lastBirthYear ?? 0
+      };
+      const c = new Cytophage(b.x ?? 0, b.y ?? 0, opts);
+      // переопределяем id и имя, чтобы сохранить старые
       c.id = b.id;
-      c.name = b.name;
-      c.vx = b.vx;
-      c.vy = b.vy;
-      c.maxSpeed = b.maxSpeed;
-      c.acceleration = b.acceleration;
-      c.friction = b.friction;
-      c.energy = b.energy;
-      c.maxEnergy = b.maxEnergy;
-      c.size = b.size;
-      c.visionRadius = b.visionRadius;
-      c.ageTicks = b.ageTicks || 0;
-      stats.totalBorn -= 1;
+      c.name = b.name ?? c.name;
+      c.vx = b.vx ?? c.vx;
+      c.vy = b.vy ?? c.vy;
+      c.size = b.size ?? c.size;
+      c.visionRadius = b.visionRadius ?? c.visionRadius;
+      c.childrenCount = b.childrenCount ?? 0;
       return c;
     });
 
@@ -161,10 +249,15 @@ function loadState() {
       return fp;
     });
 
+    // корректируем next ids
     const maxBId = bacteriaArray.reduce((m, b) => Math.max(m, b.id), 0);
     const maxFId = foodArray.reduce((m, f) => Math.max(m, f.id), 0);
     nextBacteriaId = Math.max(nextBacteriaId, maxBId + 1);
     nextFoodId = Math.max(nextFoodId, maxFId + 1);
+
+    // корректируем nextFamilyId
+    const maxFamId = bacteriaArray.reduce((m, b) => Math.max(m, b.familyId || 0), 0);
+    nextFamilyId = Math.max(nextFamilyId, maxFamId + 1, nextFamilyId);
 
     console.log("World state loaded from file");
   } catch (err) {
@@ -174,6 +267,7 @@ function loadState() {
   }
 }
 
+// ---- EVENT LOG ----
 function logEvent(obj) {
   const line = JSON.stringify(obj) + "\n";
   try {
@@ -183,6 +277,7 @@ function logEvent(obj) {
   }
 }
 
+// ---- WORLD INIT ----
 function spawnFoodRandom() {
   const x = randRange(0, world.width);
   const y = randRange(0, world.height);
@@ -198,28 +293,32 @@ function initWorld() {
   foodArray = [];
   nextBacteriaId = 1;
   nextFoodId = 1;
+  nextFamilyId = 1;
 
   const startX = world.width / 2;
   const startY = world.height / 2;
-  bacteriaArray.push(new Cytophage(startX, startY, 0, null));
+  bacteriaArray.push(new Cytophage(startX, startY, { generation: 0, parentId: null }));
 
   for (let i = 0; i < TARGET_FOOD_COUNT; i++) {
     spawnFoodRandom();
   }
 }
 
-function maintainFood() {
-  while (foodArray.length < TARGET_FOOD_COUNT) {
-    spawnFoodRandom();
-  }
-}
-
+// ---- HELPERS ----
 function distanceSq(ax, ay, bx, by) {
   const dx = bx - ax;
   const dy = by - ay;
   return dx*dx + dy*dy;
 }
 
+// ---- FOOD LOGIC ----
+function maintainFood() {
+  while (foodArray.length < TARGET_FOOD_COUNT) {
+    spawnFoodRandom();
+  }
+}
+
+// ---- BACTERIA BEHAVIOUR ----
 function findBestFoodFor(bacteria) {
   let bestFood = null;
   let bestScore = Infinity;
@@ -230,17 +329,17 @@ function findBestFoodFor(bacteria) {
     if (distSq > visionRadiusSq) continue;
     const dist = Math.sqrt(distSq);
 
-    let competitionPenalty = 0;
+    // небольшое предпочтение к еде, которая ближе к членам семьи
+    let familyBonus = 0;
     for (const other of bacteriaArray) {
       if (other === bacteria) continue;
-      if (other.targetFoodId === food.id) {
-        const odSq = distanceSq(other.x, other.y, food.x, food.y);
-        const od = Math.sqrt(odSq) || 1;
-        competitionPenalty += 500 / od;
-      }
+      if (other.familyId !== bacteria.familyId) continue;
+      const odSq = distanceSq(other.x, other.y, food.x, food.y);
+      const od = Math.sqrt(odSq) || 1;
+      familyBonus += 50 / od;
     }
 
-    const score = dist + competitionPenalty;
+    const score = dist - familyBonus;
     if (score < bestScore) {
       bestScore = score;
       bestFood = food;
@@ -250,7 +349,7 @@ function findBestFoodFor(bacteria) {
   return bestFood;
 }
 
-function handleCompetitionFor(b) {
+function handleSeparationAndFamily(b) {
   let repelX = 0;
   let repelY = 0;
 
@@ -259,13 +358,15 @@ function handleCompetitionFor(b) {
     const dx = b.x - other.x;
     const dy = b.y - other.y;
     const distSq = dx * dx + dy * dy;
-    const minDist = (b.size + other.size) * 2;
+    if (distSq < 0.0001) continue;
 
-    if (distSq < minDist * minDist && distSq > 0.0001) {
-      const dist = Math.sqrt(distSq);
+    const dist = Math.sqrt(distSq);
+    const minDist = (b.size + other.size) * 1.5;
+
+    // базовое отталкивание от всех
+    if (dist < minDist) {
       const nx = dx / dist;
       const ny = dy / dist;
-
       const force = 0.8 * (1 - dist / (minDist * 2));
       const slideForce = force * 0.5;
 
@@ -275,10 +376,58 @@ function handleCompetitionFor(b) {
       repelX += -ny * slideForce;
       repelY += nx * slideForce;
     }
+
+    // лёгкое притяжение к семье (чтобы семья не расползалась)
+    if (other.familyId === b.familyId && dist > minDist && dist < 600) {
+      const nx = -dx / dist;
+      const ny = -dy / dist;
+      const famPull = 0.05 * (1 - dist / 600);
+      repelX += nx * famPull;
+      repelY += ny * famPull;
+    }
   }
 
   b.vx += repelX * 0.1;
   b.vy += repelY * 0.1;
+}
+
+function maybeReproduce(b, newChildren) {
+  const ageYears = b.ageYears;
+
+  if (!b.isAdult) return;
+  if (b.hunger < MAX_HUNGER * 0.9) return; // нужно быть почти полностью сытым
+  if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
+
+  // создаём одного ребёнка
+  const offset = 10;
+  const childX = b.x + randRange(-offset, offset);
+  const childY = b.y + randRange(-offset, offset);
+
+  const child = new Cytophage(childX, childY, {
+    generation: b.generation + 1,
+    parentId: b.id,
+    familyId: b.familyId,
+    familyColor: b.familyColor,
+    hunger: MAX_HUNGER * 0.6,
+    lastBirthYear: 0
+  });
+
+  b.childrenCount += 1;
+  b.lastBirthYear = ageYears;
+  b.hunger -= BIRTH_HUNGER_COST;
+  if (b.hunger < 0) b.hunger = 0;
+
+  newChildren.push(child);
+
+  logEvent({
+    type: "reproduce",
+    parentId: b.id,
+    childId: child.id,
+    parentAgeYears: ageYears,
+    familyId: b.familyId,
+    time: new Date().toISOString(),
+    tick: stats.tickCount
+  });
 }
 
 function updateBacteria() {
@@ -286,57 +435,59 @@ function updateBacteria() {
   const newChildren = [];
 
   for (const b of bacteriaArray) {
+    // возраст
     b.ageTicks += 1;
+    const ageYears = b.ageYears;
 
-    const baseSize = 3;
-    const energyDrain = 0.02 * (b.size / baseSize);
-    b.energy -= energyDrain;
+    // голод
+    const hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
+    b.hunger -= hungerDrain;
+    if (b.hunger < 0) b.hunger = 0;
 
-    if (b.energy <= 0) {
+    // смерть от голода
+    if (b.hunger <= 0) {
       deadIds.add(b.id);
       stats.totalDied += 1;
       logEvent({
         type: "death",
         id: b.id,
-        reason: "energy_zero",
-        ageTicks: b.ageTicks,
+        reason: "starvation",
+        ageYears,
         generation: b.generation,
-        tick: stats.tickCount,
-        time: new Date().toISOString()
+        familyId: b.familyId,
+        time: new Date().toISOString(),
+        tick: stats.tickCount
       });
       continue;
     }
 
-    if (b.energy >= b.maxEnergy) {
-      const offset = 10;
-
-      const childGen = b.generation + 1;
-      const child1 = new Cytophage(b.x - offset, b.y, childGen, b.id);
-      const child2 = new Cytophage(b.x + offset, b.y, childGen, b.id);
-
-      child1.energy = b.maxEnergy * 0.45;
-      child2.energy = b.maxEnergy * 0.45;
-
-      newChildren.push(child1, child2);
+    // смерть от старости
+    if (ageYears >= b.lifespanYears) {
       deadIds.add(b.id);
       stats.totalDied += 1;
       logEvent({
         type: "death",
         id: b.id,
-        reason: "reproduce",
-        ageTicks: b.ageTicks,
+        reason: "old_age",
+        ageYears,
+        lifespanYears: b.lifespanYears,
         generation: b.generation,
-        tick: stats.tickCount,
-        time: new Date().toISOString()
+        familyId: b.familyId,
+        time: new Date().toISOString(),
+        tick: stats.tickCount
       });
       continue;
     }
 
-    handleCompetitionFor(b);
+    // рождение (если условия подходят)
+    maybeReproduce(b, newChildren);
 
+    // отталкивание и притяжение семьи
+    handleSeparationAndFamily(b);
+
+    // поиск еды
     const bestFood = findBestFoodFor(b);
     if (bestFood) {
-      b.targetFoodId = bestFood.id;
       const dx = bestFood.x - b.x;
       const dy = bestFood.y - b.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -347,22 +498,25 @@ function updateBacteria() {
       b.vx += (desiredVx - b.vx) * b.acceleration;
       b.vy += (desiredVy - b.vy) * b.acceleration;
     } else {
-      b.targetFoodId = null;
+      // лёгкое блуждание
       b.vx += (Math.random() - 0.5) * 0.2;
       b.vy += (Math.random() - 0.5) * 0.2;
       b.vx *= b.friction;
       b.vy *= b.friction;
     }
 
+    // ограничение скорости
     const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     if (speed > b.maxSpeed) {
       b.vx = (b.vx / speed) * b.maxSpeed;
       b.vy = (b.vy / speed) * b.maxSpeed;
     }
 
+    // движение
     b.x += b.vx;
     b.y += b.vy;
 
+    // границы мира
     if (b.x < 0) {
       b.x = 0;
       b.vx = Math.abs(b.vx) * 0.9;
@@ -379,7 +533,10 @@ function updateBacteria() {
       b.vy = -Math.abs(b.vy) * 0.9;
     }
 
-    b.size = 3 + (b.energy / b.maxEnergy) * 12;
+    // размер по возрасту: растёт до взрослого состояния
+    const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
+    const baseSize = 4 + youthFactor * 10; // до ~14
+    b.size = baseSize;
   }
 
   if (deadIds.size > 0 || newChildren.length > 0) {
@@ -388,6 +545,7 @@ function updateBacteria() {
   }
 }
 
+// ---- FOOD EATING ----
 function handleEating() {
   const eatenFoodIds = new Set();
 
@@ -398,10 +556,8 @@ function handleEating() {
       const eatRadius = b.size * 1.2;
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
-        b.energy += 3;
-        if (b.energy > b.maxEnergy) {
-          b.energy = b.maxEnergy;
-        }
+        b.hunger += FOOD_HUNGER_GAIN;
+        if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
       }
     }
   }
@@ -411,6 +567,7 @@ function handleEating() {
   }
 }
 
+// ---- MAIN TICK ----
 function tick() {
   stats.tickCount += 1;
 
@@ -429,6 +586,7 @@ function tick() {
   }
 }
 
+// ---- API ----
 app.get("/state", (req, res) => {
   res.json({
     world,
@@ -439,10 +597,14 @@ app.get("/state", (req, res) => {
       x: b.x,
       y: b.y,
       size: b.size,
-      energy: b.energy,
-      maxEnergy: b.maxEnergy,
+      hunger: b.hunger,
+      maxHunger: b.maxHunger,
       generation: b.generation,
-      ageTicks: b.ageTicks
+      ageYears: b.ageYears,
+      lifespanYears: b.lifespanYears,
+      familyId: b.familyId,
+      familyColor: b.familyColor,
+      childrenCount: b.childrenCount
     })),
     food: foodArray.map(f => ({
       id: f.id,
@@ -456,6 +618,7 @@ app.get("/stats", (req, res) => {
   res.json(stats);
 });
 
+// ---- START ----
 loadState();
 setInterval(tick, TICK_INTERVAL);
 
