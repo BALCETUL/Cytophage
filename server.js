@@ -17,26 +17,26 @@ const TARGET_FOOD_COUNT = 4000;
 const TICK_INTERVAL = 80; // ms
 const MS_PER_TICK = TICK_INTERVAL;
 
-// 1 час (3600000 ms) = 1 "год"
+// 1 час (3600000 ms) = 1 "год" мира
 const MS_PER_YEAR = 60 * 60 * 1000;
 const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
 
-// возрастные границы (в "годах")
+// возрастные границы (в "годах мира")
 const ADULT_AGE_YEARS = 18;
 const BIRTH_COOLDOWN_YEARS = 5;
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
-// голод
-const MAX_HUNGER = 100;             // максимум 100 еды
-const BASE_HUNGER_DRAIN = 0.01;     // базовый расход за тик (быстрее голодают)
+// голод (0–100)
+const MAX_HUNGER = 100;               // максимум 100 еды
+const BASE_HUNGER_DRAIN = 0.01;       // базовый расход за тик (довольно быстро голодают)
 const HUNGER_DRAIN_PER_SIZE = 0.00005; // расход от размера
-const FOOD_HUNGER_GAIN = 5;         // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 35;       // сколько голода тратится на ребёнка
+const FOOD_HUNGER_GAIN = 5;           // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 35;         // сколько голода тратится на ребёнка
 
 // рост / размер
-const MAX_SIZE_POINTS = 1000;       // максимум "массы"
-const SIZE_GAIN_PER_FOOD = 1;       // сколько размера даёт одна съеденная еда
+const MAX_SIZE_POINTS = 1000;         // максимум "массы"
+const SIZE_GAIN_PER_FOOD = 1;         // сколько "массы" даёт одна еда
 
 // ---- RANDOM ----
 function randRange(min, max) {
@@ -55,7 +55,6 @@ const NAMES_LIST = [
   "Edward Norton","Samuel L. Jackson","Scarlett Johansson","Natalie Portman",
   "Emma Stone","Anne Hathaway","Morgan Freeman","Denzel Washington","Tom Hanks",
   "Keira Knightley","Kate Winslet","Jennifer Lawrence","Charlize Theron","Gal Gadot",
-  // новые имена из мультиков и футбола
   "Mickey Mouse","Donald Duck","Goofy","Bugs Bunny","Daffy Duck",
   "SpongeBob","Patrick Star","Squidward","Naruto Uzumaki","Sasuke Uchiha",
   "Son Goku","Vegeta","Luffy","Zoro","Nami",
@@ -75,26 +74,24 @@ function getRandomName() {
 
 // ---- Имена кланов ----
 const COLONY_NAMES = [
-  "Альфа", "Бета", "Гамма", "Дельта", "Эхо",
-  "Омега", "Титаны", "Стражи", "Стая", "Легион",
-  "Искры", "Пламя", "Луна", "Солнце", "Тени",
-  "Волки", "Ястребы", "Космос", "Гроза", "Мираж",
-  // ещё кланы
-  "Кристалл", "Улей", "Ковчег", "Феникс", "Призрак",
-  "Щит", "Коготь", "Буря", "Цитадель", "Портал",
-  "Вихрь", "Комета", "Небула", "Спираль", "Магма",
-  "Химеры", "Гидра", "Оса", "Рой", "Лабиринт",
-  "Оазис", "Пик", "Гром", "Туман", "Сияние",
-  "Туманность", "Осколки", "Стражи Глубин", "Созвездие", "Обсидиан",
-  "Легион Ночи", "Пески Времени", "Холод Тьмы", "Морской Бриз", "Ночные Волки",
-  "Звёздный Путь", "Ледяные Крылья", "Чёрный Рассвет", "Зелёный Лист", "Каменный Круг"
+  "Альфа","Бета","Гамма","Дельта","Эхо",
+  "Омега","Титаны","Стражи","Стая","Легион",
+  "Искры","Пламя","Луна","Солнце","Тени",
+  "Волки","Ястребы","Космос","Гроза","Мираж",
+  "Кристалл","Улей","Ковчег","Феникс","Призрак",
+  "Щит","Коготь","Буря","Цитадель","Портал",
+  "Вихрь","Комета","Небула","Спираль","Магма",
+  "Химеры","Гидра","Оса","Рой","Лабиринт",
+  "Оазис","Пик","Гром","Туман","Сияние",
+  "Туманность","Осколки","Стражи Глубин","Созвездие","Обсидиан",
+  "Легион Ночи","Пески Времени","Холод Тьмы","Морской Бриз","Ночные Волки",
+  "Звёздный Путь","Ледяные Крылья","Чёрный Рассвет","Зелёный Лист","Каменный Круг"
 ];
 
 function getColonyNameById(id) {
   if (id >= 1 && id <= COLONY_NAMES.length) {
     return COLONY_NAMES[id - 1];
   }
-  // когда имена кончатся, будут Бродяги-N
   return "Бродяги-" + id;
 }
 
@@ -222,10 +219,6 @@ class Cytophage {
 
   get isAdult() {
     return this.ageYears >= ADULT_AGE_YEARS;
-  }
-
-  get isJuvenile() {
-    return this.ageYears < ADULT_AGE_YEARS;
   }
 }
 
@@ -509,7 +502,7 @@ function maybeReproduce(b, newChildren) {
   let familyColor = b.familyColor;
   let familyName = b.familyName;
 
-  // если родитель — самый старший (лидер), ребёнок выходит в новый клан с новым цветом
+  // если родитель — старейший (лидер), ребёнок выходит в новый клан с новым цветом
   if (b.isLeader) {
     const newFam = createFamily();
     familyId = newFam.familyId;
@@ -546,7 +539,6 @@ function maybeReproduce(b, newChildren) {
     tick: stats.tickCount
   });
 }
-
 
 function updateBacteria() {
   const deadIds = new Set();
@@ -656,7 +648,7 @@ function updateBacteria() {
     // размер зависит от возраста и накопленного роста (еды)
     const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
     const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
-    const baseSize = 4 + youthFactor * 8 + foodFactor * 10; // комбинируем возраст и рост
+    const baseSize = 4 + youthFactor * 8 + foodFactor * 10;
     b.size = baseSize;
   }
 
