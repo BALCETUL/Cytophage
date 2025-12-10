@@ -24,6 +24,7 @@ const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
 
 // возрастные границы (в "годах мира")
 const ADULT_AGE_YEARS = 18;
+const REPRO_MIN_AGE_YEARS = 0.5; // с этого возраста (Юный) можно давать потомство
 const BIRTH_COOLDOWN_YEARS = 5;
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
@@ -492,8 +493,13 @@ function handleSeparationAndFamily(b) {
 function maybeReproduce(b, newChildren) {
   const ageYears = b.ageYears;
 
-  if (!b.isAdult) return;
-  if (b.hunger < MAX_HUNGER * 0.9) return; // быть почти полностью сытым
+  // можно рожать, когда как минимум стадия "Юный" (0.5+ лет)
+  if (ageYears < REPRO_MIN_AGE_YEARS) return;
+  // обязательно максимальный размер
+  if ((b.sizePoints || 0) < (b.maxSizePoints || MAX_SIZE_POINTS)) return;
+  // должна быть почти полностью сыта
+  if (b.hunger < MAX_HUNGER * 0.9) return;
+  // кулдаун между рождениями (в "годах")
   if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
   const offset = 10;
