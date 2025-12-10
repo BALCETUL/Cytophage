@@ -50,7 +50,18 @@ const NAMES_LIST = [
   "Keanu Reeves","Hugh Jackman","Ryan Gosling","Ryan Reynolds","Jake Gyllenhaal",
   "Edward Norton","Samuel L. Jackson","Scarlett Johansson","Natalie Portman",
   "Emma Stone","Anne Hathaway","Morgan Freeman","Denzel Washington","Tom Hanks",
-  "Keira Knightley","Kate Winslet","Jennifer Lawrence","Charlize Theron","Gal Gadot"
+  "Keira Knightley","Kate Winslet","Jennifer Lawrence","Charlize Theron","Gal Gadot",
+  // новые имена из мультиков и футбола
+  "Mickey Mouse","Donald Duck","Goofy","Bugs Bunny","Daffy Duck",
+  "SpongeBob","Patrick Star","Squidward","Naruto Uzumaki","Sasuke Uchiha",
+  "Son Goku","Vegeta","Luffy","Zoro","Nami",
+  "Shrek","Fiona","Donkey","Woody","Buzz Lightyear",
+  "Simba","Mufasa","Scar","Timon","Pumbaa",
+  "Lionel Messi","Cristiano Ronaldo","Neymar","Kylian Mbappé","Erling Haaland",
+  "Robert Lewandowski","Luka Modrić","Kevin De Bruyne","Mohamed Salah","Harry Kane",
+  "Zlatan Ibrahimović","Andrés Iniesta","Xavi","Ronaldinho","Pelé",
+  "Diego Maradona","Paolo Maldini","Sergio Ramos","Gianluigi Buffon","Thierry Henry",
+  "Didier Drogba","Frank Lampard","Steven Gerrard","Wayne Rooney","Karim Benzema"
 ];
 
 function getRandomName() {
@@ -63,7 +74,16 @@ const COLONY_NAMES = [
   "Альфа", "Бета", "Гамма", "Дельта", "Эхо",
   "Омега", "Титаны", "Стражи", "Стая", "Легион",
   "Искры", "Пламя", "Луна", "Солнце", "Тени",
-  "Волки", "Ястребы", "Космос", "Гроза", "Мираж"
+  "Волки", "Ястребы", "Космос", "Гроза", "Мираж",
+  // ещё кланы
+  "Кристалл", "Улей", "Ковчег", "Феникс", "Призрак",
+  "Щит", "Коготь", "Буря", "Цитадель", "Портал",
+  "Вихрь", "Комета", "Небула", "Спираль", "Магма",
+  "Химеры", "Гидра", "Оса", "Рой", "Лабиринт",
+  "Оазис", "Пик", "Гром", "Туман", "Сияние",
+  "Туманность", "Осколки", "Стражи Глубин", "Созвездие", "Обсидиан",
+  "Легион Ночи", "Пески Времени", "Холод Тьмы", "Морской Бриз", "Ночные Волки",
+  "Звёздный Путь", "Ледяные Крылья", "Чёрный Рассвет", "Зелёный Лист", "Каменный Круг"
 ];
 
 function getColonyNameById(id) {
@@ -265,6 +285,9 @@ function loadState() {
       c.size = b.size ?? c.size;
       c.visionRadius = b.visionRadius ?? c.visionRadius;
       c.isLeader = b.isLeader ?? false;
+      if (!c.familyName && c.familyId) {
+        c.familyName = getColonyNameById(c.familyId);
+      }
       return c;
     });
 
@@ -468,12 +491,28 @@ function maybeReproduce(b, newChildren) {
   const childX = b.x + randRange(-offset, offset);
   const childY = b.y + randRange(-offset, offset);
 
+  // если это лидер семьи, при рождении он отделяется в новый клан вместе с ребёнком
+  let familyId = b.familyId;
+  let familyColor = b.familyColor;
+  let familyName = b.familyName;
+
+  if (b.isLeader) {
+    const newFam = createFamily();
+    familyId = newFam.familyId;
+    familyColor = newFam.familyColor;
+    familyName = newFam.familyName;
+
+    b.familyId = familyId;
+    b.familyColor = familyColor;
+    b.familyName = familyName;
+  }
+
   const child = new Cytophage(childX, childY, {
     generation: b.generation + 1,
     parentId: b.id,
-    familyId: b.familyId,
-    familyColor: b.familyColor,
-    familyName: b.familyName,
+    familyId,
+    familyColor,
+    familyName,
     hunger: MAX_HUNGER * 0.6,
     lastBirthYear: 0
   });
@@ -490,8 +529,8 @@ function maybeReproduce(b, newChildren) {
     parentId: b.id,
     childId: child.id,
     parentAgeYears: ageYears,
-    familyId: b.familyId,
-    familyName: b.familyName,
+    familyId,
+    familyName,
     time: new Date().toISOString(),
     tick: stats.tickCount
   });
