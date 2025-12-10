@@ -25,6 +25,7 @@
     #canvas:active {
       cursor: grabbing;
     }
+
     .hud {
       position: fixed;
       left: 10px;
@@ -78,8 +79,9 @@
       background: rgba(0, 0, 0, 0.6);
       border-radius: 8px;
       font-size: 12px;
-      max-width: 260px;
-      max-height: 520px; /* ~20 строк */
+      max-width: 360px;
+      min-width: 280px;
+      max-height: 520px;
       overflow-y: auto;
       pointer-events: auto;
     }
@@ -91,19 +93,30 @@
       top: 0;
       background: rgba(0, 0, 0, 0.9);
       padding-bottom: 3px;
+      z-index: 1;
     }
     .leader-row {
       margin-top: 3px;
       border-bottom: 1px solid rgba(110,118,129,0.3);
-      padding-bottom: 2px;
-      padding-top: 2px;
+      padding: 3px 2px;
+      cursor: pointer;
     }
     .leader-row:last-child {
       border-bottom: none;
     }
+    .leader-row:hover {
+      background: rgba(56,139,253,0.15);
+    }
+    .row-selected {
+      border: 1px solid #2ea043;
+      background: rgba(46,160,67,0.25);
+    }
     .leader-main {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
     }
     .leader-name {
       font-weight: 500;
@@ -115,6 +128,7 @@
     .leader-info {
       font-size: 11px;
       color: #c9d1d9;
+      white-space: nowrap;
     }
 
     .controls {
@@ -157,9 +171,9 @@
     <div class="row" id="hudRow3"></div>
   </div>
 
-  <!-- Правая панель: все колонии -->
+  <!-- Правая панель: список всех бактерий (лидеры первыми) -->
   <div class="hud-right">
-    <div class="hud-right-title">Колонии (кланы)</div>
+    <div class="hud-right-title">Бактерии и кланы</div>
     <div id="leadersList"></div>
   </div>
 
@@ -169,7 +183,7 @@
   </div>
 
   <script>
-    // Сразу твой Render-URL:
+    // URL твоего сервера на Render
     const SERVER_URL = "https://cytophage.onrender.com";
 
     const canvas = document.getElementById("canvas");
@@ -214,6 +228,7 @@
     let bacteria = [];
     let food = [];
     let lastServerOk = false;
+    let selectedBacteriumId = null; // кого отслеживаем / подсвечиваем
 
     toggleDetailsBtn.addEventListener("click", () => {
       showDetails = !showDetails;
@@ -278,7 +293,42 @@
       return { x: sx, y: sy };
     }
 
+    function formatAgeLabel(ageYears) {
+      if (ageYears === undefined || isNaN(ageYears)) return "?";
+      if (ageYears < 0.2) return "Новорождённый";
+      if (ageYears < 0.5) return "Малыш";
+      if (ageYears < 1.0) return "Юный";
+
+      const yearsInt = Math.floor(ageYears);
+      const lastTwo = yearsInt % 100;
+      const lastDigit = yearsInt % 10;
+      let word;
+      if (lastTwo >= 11 && lastTwo <= 14) {
+        word = "лет";
+      } else if (lastDigit === 1) {
+        word = "год";
+      } else if (lastDigit >= 2 && lastDigit <= 4) {
+        word = "года";
+      } else {
+        word = "лет";
+      }
+      return yearsInt + " " + word;
+    }
+
     function draw() {
+      // если кто-то выбран справа — камера плавно следует за ним
+      if (selectedBacteriumId !== null) {
+        const target = bacteria.find(b => b.id === selectedBacteriumId);
+        if (target) {
+          const lerp = 0.1;
+          cameraX += (target.x - cameraX) * lerp;
+          cameraY += (target.y - cameraY) * lerp;
+        } else {
+          // если бактерия пропала (умерла) — отцепляемся
+          selectedBacteriumId = null;
+        }
+      }
+
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = "#020409";
       ctx.fillRect(0, 0, width, height);
@@ -307,7 +357,6 @@
       }
       ctx.restore();
 
-
       // бактерии
       ctx.save();
       for (const b of bacteria) {
@@ -331,6 +380,15 @@
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
           ctx.beginPath();
           ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // выделение выбранной бактерии (зелёная рамка)
+        if (selectedBacteriumId === b.id) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(46, 160, 67, 0.95)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
           ctx.stroke();
         }
 
@@ -358,11 +416,12 @@
           const startY = p.y + radius + 25;
           const lineH = 11;
 
+          const ageLabel = formatAgeLabel(b.ageYears);
           ctx.textAlign = "center";
           ctx.font = "9px system-ui";
           ctx.fillStyle = "#e6edf3";
           ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
-          ctx.fillText(`Возраст: ${b.ageYears.toFixed(2)} лет`, p.x, startY + lineH);
+          ctx.fillText(`Возраст: ${ageLabel}`, p.x, startY + lineH);
           ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
           ctx.fillText(`Размер: ${Math.round(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
           ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
@@ -405,51 +464,77 @@
     }
 
     function updateRightHud() {
-      // собираем статистику по колониям
-      const colonies = new Map();
+      if (!bacteria || bacteria.length === 0) {
+        leadersListEl.innerHTML = "<div class='leader-info'>Пока нет бактерий</div>";
+        return;
+      }
+
+      // размер кланов
+      const clanSize = new Map();
       for (const b of bacteria) {
         const id = b.familyId || 0;
-        if (!colonies.has(id)) {
-          colonies.set(id, {
-            familyId: id,
-            familyName: b.familyName || "нет",
-            color: b.familyColor || "#58a6ff",
-            size: 0,
-            leader: null
-          });
-        }
-        const col = colonies.get(id);
-        col.size += 1;
-        if (!col.leader || (b.ageYears || 0) > (col.leader.ageYears || 0)) {
-          col.leader = b;
+        clanSize.set(id, (clanSize.get(id) || 0) + 1);
+      }
+
+      const leaders = [];
+      const others = [];
+      for (const b of bacteria) {
+        if (b.isLeader) {
+          leaders.push(b);
+        } else {
+          others.push(b);
         }
       }
 
-      const list = Array.from(colonies.values()).filter(c => c.leader);
-      // сортировка: по размеру клана, потом по возрасту лидера
-      list.sort((a, b) => {
-        if (b.size !== a.size) return b.size - a.size;
-        return (b.leader.ageYears || 0) - (a.leader.ageYears || 0);
-      });
+      const byAgeDesc = (a, b) => {
+        const aa = a.ageYears || 0;
+        const bb = b.ageYears || 0;
+        return bb - aa;
+      };
+
+      leaders.sort(byAgeDesc);
+      others.sort(byAgeDesc);
+
+      const all = leaders.concat(others);
 
       let html = "";
-      list.forEach((c, idx) => {
-        const leader = c.leader;
-        const age = leader.ageYears !== undefined ? leader.ageYears.toFixed(2) : "?";
-        const leaderMark = leader.isLeader ? " ⭐" : "";
-        html += `<div class="leader-row">
+      let index = 1;
+      for (const b of all) {
+        const ageLabel = formatAgeLabel(b.ageYears);
+        const size = clanSize.get(b.familyId || 0) || 1;
+        const leaderMark = b.isLeader ? " ⭐" : "";
+        const selectedClass = (selectedBacteriumId === b.id) ? " row-selected" : "";
+        html += `<div class="leader-row${selectedClass}" data-id="${b.id}">
           <div class="leader-main">
-            <span class="leader-name">${idx + 1}. ${leader.name}${leaderMark}</span>
-            <span class="leader-clan">${c.familyName}</span>
+            <span class="leader-name">${index}. ${b.name}${leaderMark}</span>
+            <span class="leader-clan">${b.familyName || ""}</span>
           </div>
           <div class="leader-info">
-            Возраст лидера: ${age} лет · В клане: ${c.size}
+            Возраст: ${ageLabel} · В клане: ${size}
           </div>
         </div>`;
-      });
+        index++;
+      }
 
-      leadersListEl.innerHTML = html || "<div class='leader-info'>Пока нет колоний</div>";
+      leadersListEl.innerHTML = html;
     }
+
+    // клик по таблице справа — выбрать / отцепить бактерию
+    leadersListEl.addEventListener("click", (e) => {
+      const row = e.target.closest(".leader-row");
+      if (!row) return;
+      const idStr = row.getAttribute("data-id");
+      const id = parseInt(idStr, 10);
+      if (!Number.isFinite(id)) return;
+
+      if (selectedBacteriumId === id) {
+        selectedBacteriumId = null; // отцепиться
+      } else {
+        selectedBacteriumId = id;   // начать следить
+      }
+      // обновим подсветку
+      updateRightHud();
+    });
 
     async function fetchState() {
       try {
@@ -462,7 +547,6 @@
         food = data.food || [];
         lastStats = data.stats || null;
 
-        // сервер ок
         if (!lastServerOk) {
           lastServerOk = true;
           serverDot.classList.remove("server-bad");
@@ -473,7 +557,6 @@
         updateLeftHud();
         updateRightHud();
       } catch (err) {
-        // сервер не отвечает
         lastServerOk = false;
         serverDot.classList.remove("server-ok");
         serverDot.classList.add("server-bad");
