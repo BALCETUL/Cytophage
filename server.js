@@ -51,6 +51,7 @@ const NAMES_LIST = [
   "Edward Norton","Samuel L. Jackson","Scarlett Johansson","Natalie Portman",
   "Emma Stone","Anne Hathaway","Morgan Freeman","Denzel Washington","Tom Hanks",
   "Keira Knightley","Kate Winslet","Jennifer Lawrence","Charlize Theron","Gal Gadot",
+  // новые имена из мультиков и футбола
   "Mickey Mouse","Donald Duck","Goofy","Bugs Bunny","Daffy Duck",
   "SpongeBob","Patrick Star","Squidward","Naruto Uzumaki","Sasuke Uchiha",
   "Son Goku","Vegeta","Luffy","Zoro","Nami",
@@ -74,6 +75,7 @@ const COLONY_NAMES = [
   "Омега", "Титаны", "Стражи", "Стая", "Легион",
   "Искры", "Пламя", "Луна", "Солнце", "Тени",
   "Волки", "Ястребы", "Космос", "Гроза", "Мираж",
+  // ещё кланы
   "Кристалл", "Улей", "Ковчег", "Феникс", "Призрак",
   "Щит", "Коготь", "Буря", "Цитадель", "Портал",
   "Вихрь", "Комета", "Небула", "Спираль", "Магма",
