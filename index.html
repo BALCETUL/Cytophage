@@ -79,17 +79,24 @@
       border-radius: 8px;
       font-size: 12px;
       max-width: 260px;
-      pointer-events: none;
+      max-height: 520px; /* ~20 строк */
+      overflow-y: auto;
+      pointer-events: auto;
     }
     .hud-right-title {
       font-weight: 600;
       color: #79c0ff;
       margin-bottom: 4px;
+      position: sticky;
+      top: 0;
+      background: rgba(0, 0, 0, 0.9);
+      padding-bottom: 3px;
     }
     .leader-row {
       margin-top: 3px;
       border-bottom: 1px solid rgba(110,118,129,0.3);
       padding-bottom: 2px;
+      padding-top: 2px;
     }
     .leader-row:last-child {
       border-bottom: none;
@@ -150,9 +157,9 @@
     <div class="row" id="hudRow3"></div>
   </div>
 
-  <!-- Правая панель: лидеры колоний -->
+  <!-- Правая панель: все колонии -->
   <div class="hud-right">
-    <div class="hud-right-title">Лидеры колоний</div>
+    <div class="hud-right-title">Колонии (кланы)</div>
     <div id="leadersList"></div>
   </div>
 
@@ -317,6 +324,20 @@
         ctx.fill();
         ctx.shadowBlur = 0;
 
+        // глаз
+        const eyeRadius = radius * 0.4;
+        const pupilRadius = eyeRadius * 0.45;
+        const eyeX = p.x + radius * 0.3;
+        const eyeY = p.y - radius * 0.3;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, eyeRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, pupilRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#000000";
+        ctx.fill();
+
         // кольцо лидера
         if (b.isLeader) {
           ctx.lineWidth = 2;
@@ -339,36 +360,29 @@
         ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
         ctx.fillRect(barX, barY, barWidth * hungerRatio, barHeight);
 
-        // имя + поколение + возраст (кратко)
+        // имя (кратко, над бактерией)
         ctx.textAlign = "center";
-
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
         ctx.fillText(b.name, p.x, barY - 3);
 
-        ctx.fillStyle = "#7ee787";
-        ctx.font = "9px system-ui";
-        const ageText = b.ageYears !== undefined
-          ? `gen ${Math.floor(b.generation)} · ${b.ageYears.toFixed(1)} лет`
-          : `gen ${Math.floor(b.generation)}`;
-        ctx.fillText(ageText, p.x, barY - 13);
-
-        // подробные таблички, если режим включён
+        // подробные таблички, если режим включён (снизу бактерии)
         if (showDetails) {
-          ctx.textAlign = "left";
-          const startY = barY - 25;
+          const startY = p.y + radius + 10;
           const lineH = 11;
 
+          ctx.textAlign = "center";
           ctx.font = "9px system-ui";
           ctx.fillStyle = "#e6edf3";
-          ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x + radius + 6, startY);
-          ctx.fillText(`Возраст: ${b.ageYears.toFixed(2)} лет`, p.x + radius + 6, startY + lineH);
-          ctx.fillText(`Размер: ${b.size.toFixed(1)}`, p.x + radius + 6, startY + lineH * 2);
-          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x + radius + 6, startY + lineH * 3);
-          ctx.fillText(`Детей: ${b.childrenCount}`, p.x + radius + 6, startY + lineH * 4);
+          ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
+          ctx.fillText(`Возраст: ${b.ageYears.toFixed(2)} лет`, p.x, startY + lineH);
+          ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
+          ctx.fillText(`Размер: ${b.size.toFixed(1)}`, p.x, startY + lineH * 3);
+          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
+          ctx.fillText(`Детей: ${b.childrenCount}`, p.x, startY + lineH * 5);
           if (b.isLeader) {
             ctx.fillStyle = "#ffa657";
-            ctx.fillText(`Лидер колонии`, p.x + radius + 6, startY + lineH * 5);
+            ctx.fillText(`Лидер колонии`, p.x, startY + lineH * 6);
           }
         }
       }
@@ -404,33 +418,50 @@
     }
 
     function updateRightHud() {
-      const clanSize = new Map();
+      // собираем статистику по колониям
+      const colonies = new Map();
       for (const b of bacteria) {
         const id = b.familyId || 0;
-        clanSize.set(id, (clanSize.get(id) || 0) + 1);
+        if (!colonies.has(id)) {
+          colonies.set(id, {
+            familyId: id,
+            familyName: b.familyName || "нет",
+            color: b.familyColor || "#58a6ff",
+            size: 0,
+            leader: null
+          });
+        }
+        const col = colonies.get(id);
+        col.size += 1;
+        if (!col.leader || (b.ageYears || 0) > (col.leader.ageYears || 0)) {
+          col.leader = b;
+        }
       }
 
-      const sorted = [...bacteria].sort((a, b) => (b.ageYears || 0) - (a.ageYears || 0));
-      const topN = sorted.slice(0, 5);
+      const list = Array.from(colonies.values()).filter(c => c.leader);
+      // сортировка: по размеру клана, потом по возрасту лидера
+      list.sort((a, b) => {
+        if (b.size !== a.size) return b.size - a.size;
+        return (b.leader.ageYears || 0) - (a.leader.ageYears || 0);
+      });
 
       let html = "";
-      topN.forEach((b, idx) => {
-        const size = clanSize.get(b.familyId || 0) || 1;
-        const age = b.ageYears !== undefined ? b.ageYears.toFixed(2) : "?";
-        const clan = b.familyName || "нет";
-        const leaderMark = b.isLeader ? " ⭐" : "";
+      list.forEach((c, idx) => {
+        const leader = c.leader;
+        const age = leader.ageYears !== undefined ? leader.ageYears.toFixed(2) : "?";
+        const leaderMark = leader.isLeader ? " ⭐" : "";
         html += `<div class="leader-row">
           <div class="leader-main">
-            <span class="leader-name">${idx + 1}. ${b.name}${leaderMark}</span>
-            <span class="leader-clan">${clan}</span>
+            <span class="leader-name">${idx + 1}. ${leader.name}${leaderMark}</span>
+            <span class="leader-clan">${c.familyName}</span>
           </div>
           <div class="leader-info">
-            Возраст: ${age} лет · В клане: ${size}
+            Возраст лидера: ${age} лет · В клане: ${c.size}
           </div>
         </div>`;
       });
 
-      leadersListEl.innerHTML = html || "<div class='leader-info'>Пока нет бактерий</div>";
+      leadersListEl.innerHTML = html || "<div class='leader-info'>Пока нет колоний</div>";
     }
 
     async function fetchState() {
