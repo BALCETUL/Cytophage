@@ -1,0 +1,17 @@
+{
+  "world": {
+    "width": 8000,
+    "height": 8000
+  },
+  "nextBacteriaId": 1,
+  "nextFoodId": 1,
+  "bacteria": [],
+  "food": [],
+  "stats": {
+    "startedAt": null,
+    "lastSavedAt": null,
+    "totalBorn": 0,
+    "totalDied": 0,
+    "tickCount": 0
+  }
+}
