@@ -28,11 +28,15 @@ const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
 // голод
-const MAX_HUNGER = 1000;
-const BASE_HUNGER_DRAIN = 0.01;      // базовый расход за тик
-const HUNGER_DRAIN_PER_SIZE = 0.00002; // расход от размера
-const FOOD_HUNGER_GAIN = 40;         // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 300;       // сколько голода тратится на ребёнка
+const MAX_HUNGER = 100;           // максимум 100 еды
+const BASE_HUNGER_DRAIN = 0.001;    // базовый расход за тик
+const HUNGER_DRAIN_PER_SIZE = 0.000002; // расход от размера
+const FOOD_HUNGER_GAIN = 4;         // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 30;       // сколько голода тратится на ребёнка
+
+// рост / размер
+const MAX_SIZE_POINTS = 1000;       // максимум "массы"
+const SIZE_GAIN_PER_FOOD = 1;       // сколько размера даёт одна съеденная еда
 
 // ---- RANDOM ----
 function randRange(min, max) {
@@ -146,7 +150,8 @@ class Cytophage {
       hunger = MAX_HUNGER * 0.5,
       lifespanYears = null,
       lastBirthYear = 0,
-      childrenCount = 0
+      childrenCount = 0,
+      sizePoints = 20
     } = options;
 
     this.id = nextBacteriaId++;
@@ -188,6 +193,8 @@ class Cytophage {
     this.maxHunger = MAX_HUNGER;
 
     // размер и зрение
+    this.sizePoints = sizePoints;
+    this.maxSizePoints = MAX_SIZE_POINTS;
     this.size = 3;
     this.visionRadius = 250;
 
@@ -272,10 +279,16 @@ function loadState() {
         familyColor: b.familyColor ?? null,
         familyName: b.familyName ?? null,
         ageTicks: b.ageTicks ?? 0,
-        hunger: typeof b.hunger === "number" ? b.hunger : MAX_HUNGER * 0.5,
+        hunger: (() => {
+          let h = typeof b.hunger === "number" ? b.hunger : MAX_HUNGER * 0.5;
+          if (h > MAX_HUNGER) h = MAX_HUNGER;
+          if (h < 0) h = 0;
+          return h;
+        })(),
         lifespanYears: b.lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS),
         lastBirthYear: b.lastBirthYear ?? 0,
-        childrenCount: b.childrenCount ?? 0
+        childrenCount: b.childrenCount ?? 0,
+        sizePoints: typeof b.sizePoints === "number" ? b.sizePoints : 20
       };
       const c = new Cytophage(b.x ?? 0, b.y ?? 0, opts);
       c.id = b.id;
@@ -491,20 +504,17 @@ function maybeReproduce(b, newChildren) {
   const childX = b.x + randRange(-offset, offset);
   const childY = b.y + randRange(-offset, offset);
 
-  // если это лидер семьи, при рождении он отделяется в новый клан вместе с ребёнком
+  // по умолчанию ребёнок наследует клан родителя
   let familyId = b.familyId;
   let familyColor = b.familyColor;
   let familyName = b.familyName;
 
+  // если родитель — самый старший (лидер), ребёнок выходит в новый клан с новым цветом
   if (b.isLeader) {
     const newFam = createFamily();
     familyId = newFam.familyId;
     familyColor = newFam.familyColor;
     familyName = newFam.familyName;
-
-    b.familyId = familyId;
-    b.familyColor = familyColor;
-    b.familyName = familyName;
   }
 
   const child = new Cytophage(childX, childY, {
@@ -514,7 +524,8 @@ function maybeReproduce(b, newChildren) {
     familyColor,
     familyName,
     hunger: MAX_HUNGER * 0.6,
-    lastBirthYear: 0
+    lastBirthYear: 0,
+    sizePoints: Math.max(20, b.sizePoints * 0.5) // немного роста по наследству
   });
 
   b.childrenCount += 1;
@@ -535,6 +546,7 @@ function maybeReproduce(b, newChildren) {
     tick: stats.tickCount
   });
 }
+
 
 function updateBacteria() {
   const deadIds = new Set();
@@ -641,9 +653,10 @@ function updateBacteria() {
       b.vy = -Math.abs(b.vy) * 0.9;
     }
 
-    // размер по возрасту
+    // размер зависит от возраста и накопленного роста (еды)
     const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
-    const baseSize = 4 + youthFactor * 10; // до ~14
+    const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
+    const baseSize = 4 + youthFactor * 8 + foodFactor * 10; // комбинируем возраст и рост
     b.size = baseSize;
   }
 
@@ -664,8 +677,12 @@ function handleEating() {
       const eatRadius = b.size * 1.2;
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
+        // сытость
         b.hunger += FOOD_HUNGER_GAIN;
         if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
+        // рост от еды
+        b.sizePoints = (b.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
+        if (b.sizePoints > b.maxSizePoints) b.sizePoints = b.maxSizePoints;
       }
     }
   }
@@ -708,6 +725,8 @@ app.get("/state", (req, res) => {
       x: b.x,
       y: b.y,
       size: b.size,
+      sizePoints: b.sizePoints,
+      maxSizePoints: b.maxSizePoints,
       hunger: b.hunger,
       maxHunger: b.maxHunger,
       generation: b.generation,
