@@ -28,11 +28,11 @@ const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
 // голод
-const MAX_HUNGER = 100;           // максимум 100 еды
-const BASE_HUNGER_DRAIN = 0.001;    // базовый расход за тик
-const HUNGER_DRAIN_PER_SIZE = 0.000002; // расход от размера
-const FOOD_HUNGER_GAIN = 4;         // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 30;       // сколько голода тратится на ребёнка
+const MAX_HUNGER = 100;             // максимум 100 еды
+const BASE_HUNGER_DRAIN = 0.01;     // базовый расход за тик (быстрее голодают)
+const HUNGER_DRAIN_PER_SIZE = 0.00005; // расход от размера
+const FOOD_HUNGER_GAIN = 5;         // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 35;       // сколько голода тратится на ребёнка
 
 // рост / размер
 const MAX_SIZE_POINTS = 1000;       // максимум "массы"
