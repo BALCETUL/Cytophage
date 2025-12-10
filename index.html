@@ -183,7 +183,6 @@
   </div>
 
   <script>
-    // URL твоего сервера на Render
     const SERVER_URL = "https://cytophage.onrender.com";
 
     const canvas = document.getElementById("canvas");
@@ -209,9 +208,11 @@
       canvas.height = height;
     });
 
-    let worldWidth = 8000;
-    let worldHeight = 8000;
+    let world = { width: 8000, height: 8000 };
+    let worldWidth = world.width;
+    let worldHeight = world.height;
 
+    // Камера
     let cameraX = worldWidth / 2;
     let cameraY = worldHeight / 2;
     let zoom = 0.1;
@@ -224,11 +225,17 @@
 
     let showDetails = false;
     let lastStats = null;
-    let world = { width: worldWidth, height: worldHeight };
-    let bacteria = [];
-    let food = [];
     let lastServerOk = false;
-    let selectedBacteriumId = null; // кого отслеживаем / подсвечиваем
+
+    // "сырые" данные с сервера
+    let bacteriaRaw = [];
+    let foodRaw = [];
+
+    // сглаженные позиции (чтобы не дёргалось)
+    // id -> { x, y }
+    const renderPositions = new Map();
+
+    let selectedBacteriumId = null;
 
     toggleDetailsBtn.addEventListener("click", () => {
       showDetails = !showDetails;
@@ -315,16 +322,47 @@
       return yearsInt + " " + word;
     }
 
+    function getRenderBacteriaList() {
+      // очищаем позиции для умерших
+      const currentIds = new Set(bacteriaRaw.map(b => b.id));
+      for (const id of renderPositions.keys()) {
+        if (!currentIds.has(id)) {
+          renderPositions.delete(id);
+        }
+      }
+
+      const smoothed = [];
+      const alpha = 0.18; // коэффициент сглаживания (чем меньше, тем плавнее)
+
+      for (const b of bacteriaRaw) {
+        let rp = renderPositions.get(b.id);
+        if (!rp) {
+          rp = { x: b.x, y: b.y };
+          renderPositions.set(b.id, rp);
+        } else {
+          rp.x += (b.x - rp.x) * alpha;
+          rp.y += (b.y - rp.y) * alpha;
+        }
+        smoothed.push({
+          ...b,
+          x: rp.x,
+          y: rp.y
+        });
+      }
+      return smoothed;
+    }
+
     function draw() {
-      // если кто-то выбран справа — камера плавно следует за ним
+      const renderBacteria = getRenderBacteriaList();
+
+      // камера следует за выбранной бактерией — по сглаженным координатам
       if (selectedBacteriumId !== null) {
-        const target = bacteria.find(b => b.id === selectedBacteriumId);
+        const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.1;
+          const lerp = 0.06; // ещё мягче движение камеры
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
         } else {
-          // если бактерия пропала (умерла) — отцепляемся
           selectedBacteriumId = null;
         }
       }
@@ -344,9 +382,9 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
-      // еда
+      // еда (без интерполяции, просто по текущим данным)
       ctx.save();
-      for (const f of food) {
+      for (const f of foodRaw) {
         const p = worldToScreen(f.x, f.y);
         if (p.x < -20 || p.y < -20 || p.x > width + 20 || p.y > height + 20) continue;
         const r = 1.2 * zoom;
@@ -359,7 +397,7 @@
 
       // бактерии
       ctx.save();
-      for (const b of bacteria) {
+      for (const b of renderBacteria) {
         const p = worldToScreen(b.x, b.y);
         if (p.x < -80 || p.y < -80 || p.x > width + 80 || p.y > height + 80) continue;
 
@@ -405,13 +443,13 @@
         ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
         ctx.fillRect(barX, barY, barWidth * hungerRatio, barHeight);
 
-        // имя (кратко, над бактерией)
+        // имя над бактерией
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
         ctx.fillText(b.name, p.x, barY - 3);
 
-        // подробные таблички, если режим включён (снизу бактерии)
+        // подробные таблички, если включено (снизу)
         if (showDetails) {
           const startY = p.y + radius + 25;
           const lineH = 11;
@@ -433,15 +471,17 @@
         }
       }
       ctx.restore();
+
+      requestAnimationFrame(draw);
     }
 
     function updateLeftHud() {
-      const count = bacteria.length;
-      const foodCount = food.length;
+      const count = bacteriaRaw.length;
+      const foodCount = foodRaw.length;
 
       let maxGeneration = 0;
       let maxAge = 0;
-      for (const b of bacteria) {
+      for (const b of bacteriaRaw) {
         if (b.generation > maxGeneration) maxGeneration = b.generation;
         if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
       }
@@ -464,26 +504,22 @@
     }
 
     function updateRightHud() {
-      if (!bacteria || bacteria.length === 0) {
+      if (!bacteriaRaw || bacteriaRaw.length === 0) {
         leadersListEl.innerHTML = "<div class='leader-info'>Пока нет бактерий</div>";
         return;
       }
 
-      // размер кланов
       const clanSize = new Map();
-      for (const b of bacteria) {
+      for (const b of bacteriaRaw) {
         const id = b.familyId || 0;
         clanSize.set(id, (clanSize.get(id) || 0) + 1);
       }
 
       const leaders = [];
       const others = [];
-      for (const b of bacteria) {
-        if (b.isLeader) {
-          leaders.push(b);
-        } else {
-          others.push(b);
-        }
+      for (const b of bacteriaRaw) {
+        if (b.isLeader) leaders.push(b);
+        else others.push(b);
       }
 
       const byAgeDesc = (a, b) => {
@@ -494,7 +530,6 @@
 
       leaders.sort(byAgeDesc);
       others.sort(byAgeDesc);
-
       const all = leaders.concat(others);
 
       let html = "";
@@ -519,7 +554,6 @@
       leadersListEl.innerHTML = html;
     }
 
-    // клик по таблице справа — выбрать / отцепить бактерию
     leadersListEl.addEventListener("click", (e) => {
       const row = e.target.closest(".leader-row");
       if (!row) return;
@@ -528,11 +562,10 @@
       if (!Number.isFinite(id)) return;
 
       if (selectedBacteriumId === id) {
-        selectedBacteriumId = null; // отцепиться
+        selectedBacteriumId = null;
       } else {
-        selectedBacteriumId = id;   // начать следить
+        selectedBacteriumId = id;
       }
-      // обновим подсветку
       updateRightHud();
     });
 
@@ -540,11 +573,12 @@
       try {
         const res = await fetch(SERVER_URL + "/state", { cache: "no-cache" });
         const data = await res.json();
-        world = data.world;
+        world = data.world || world;
         worldWidth = world.width;
         worldHeight = world.height;
-        bacteria = data.bacteria || [];
-        food = data.food || [];
+
+        bacteriaRaw = data.bacteria || [];
+        foodRaw = data.food || [];
         lastStats = data.stats || null;
 
         if (!lastServerOk) {
@@ -564,13 +598,12 @@
       }
     }
 
-    setInterval(fetchState, 200);
+    // почаще можем не делать — сглаживание и так выравнивает рывки
+    setInterval(fetchState, 250);
 
-    function loop() {
-      draw();
-      requestAnimationFrame(loop);
-    }
-    loop();
+    // стартуем
+    fetchState();
+    requestAnimationFrame(draw);
   </script>
 </body>
 </html>
