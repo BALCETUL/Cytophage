@@ -70,6 +70,10 @@
       background: #f85149;
       box-shadow: 0 0 8px rgba(248,81,73,0.9);
     }
+    .uptime-value {
+      color: #79c0ff;
+      font-weight: 500;
+    }
 
     .hud-right {
       position: fixed;
@@ -166,6 +170,10 @@
       <div id="serverDot" class="server-dot"></div>
       <div id="serverStatusText">Сервер: нет данных</div>
     </div>
+    <div class="row" id="uptimeRow">
+      <span class="label">Работает:</span>
+      <span class="uptime-value" id="uptimeValue">—</span>
+    </div>
     <div class="row" id="hudRow1"></div>
     <div class="row" id="hudRow2"></div>
     <div class="row" id="hudRow3"></div>
@@ -191,6 +199,7 @@
     const hudRow1 = document.getElementById("hudRow1");
     const hudRow2 = document.getElementById("hudRow2");
     const hudRow3 = document.getElementById("hudRow3");
+    const uptimeValue = document.getElementById("uptimeValue");
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
@@ -226,6 +235,8 @@
     let showDetails = false;
     let lastStats = null;
     let lastServerOk = false;
+    let serverUptime = 0; // в секундах с сервера
+    let lastUptimeFetch = Date.now(); // когда последний раз получили uptime
 
     // "сырые" данные с сервера
     let bacteriaRaw = [];
@@ -236,6 +247,33 @@
     const renderPositions = new Map();
 
     let selectedBacteriumId = null;
+
+    // Функция форматирования времени работы
+    function formatUptime(seconds) {
+      if (!seconds || seconds < 0) return "—";
+      
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+
+      const parts = [];
+      if (days > 0) parts.push(`${days}д`);
+      if (hours > 0) parts.push(`${hours}ч`);
+      if (minutes > 0) parts.push(`${minutes}м`);
+      if (secs > 0 || parts.length === 0) parts.push(`${secs}с`);
+
+      return parts.join(' ');
+    }
+
+    // Обновление таймера каждую секунду (плавное отображение между запросами к серверу)
+    let lastUptimeFetch = Date.now();
+    setInterval(() => {
+      if (lastServerOk && serverUptime > 0) {
+        const elapsed = Math.floor((Date.now() - lastUptimeFetch) / 1000);
+        uptimeValue.textContent = formatUptime(serverUptime + elapsed);
+      }
+    }, 1000);
 
     toggleDetailsBtn.addEventListener("click", () => {
       showDetails = !showDetails;
@@ -614,14 +652,34 @@
         serverDot.classList.remove("server-ok");
         serverDot.classList.add("server-bad");
         serverStatusText.textContent = "Сервер: нет связи";
+        uptimeValue.textContent = "—";
       }
     }
+
+    // Получаем uptime с сервера
+    async function fetchUptime() {
+      try {
+        const res = await fetch(SERVER_URL + "/ping", { cache: "no-cache" });
+        const data = await res.json();
+        if (data.uptime !== undefined) {
+          serverUptime = data.uptime;
+          lastUptimeFetch = Date.now();
+          uptimeValue.textContent = formatUptime(serverUptime);
+        }
+      } catch (err) {
+        // Игнорируем ошибки
+      }
+    }
+
+    // Обновляем uptime каждые 10 секунд с сервера
+    setInterval(fetchUptime, 10000);
 
     // более частое обновление состояния + сильное сглаживание
     setInterval(fetchState, 120); // чаще обновляем состояние
 
     // стартуем
     fetchState();
+    fetchUptime();
     requestAnimationFrame(draw);
   </script>
 </body>
