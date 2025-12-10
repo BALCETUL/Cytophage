@@ -13,7 +13,8 @@ const EVENTS_FILE = path.join(__dirname, "events.log");
 // ---- WORLD SETTINGS ----
 const WORLD_WIDTH = 8000;
 const WORLD_HEIGHT = 8000;
-const TARGET_FOOD_COUNT = 4000;
+// больше еды в мире
+const TARGET_FOOD_COUNT = 8000;
 const TICK_INTERVAL = 80; // ms
 const MS_PER_TICK = TICK_INTERVAL;
 
@@ -193,7 +194,8 @@ class Cytophage {
     this.sizePoints = sizePoints;
     this.maxSizePoints = MAX_SIZE_POINTS;
     this.size = 3;
-    this.visionRadius = 250;
+    // увеличиваем радиус зрения, чтобы лучше находили еду
+    this.visionRadius = 450;
 
     // флаг лидера (определяется отдельно)
     this.isLeader = false;
@@ -365,6 +367,7 @@ function distanceSq(ax, ay, bx, by) {
 
 // ---- FOOD LOGIC ----
 function maintainFood() {
+  // всегда поддерживаем плотность еды в мире
   while (foodArray.length < TARGET_FOOD_COUNT) {
     spawnFoodRandom();
   }
@@ -610,9 +613,9 @@ function updateBacteria() {
       b.vx += (desiredVx - b.vx) * b.acceleration;
       b.vy += (desiredVy - b.vy) * b.acceleration;
     } else {
-      // блуждание
-      b.vx += (Math.random() - 0.5) * 0.2;
-      b.vy += (Math.random() - 0.5) * 0.2;
+      // блуждание — чуть активнее, чтобы не "застывали"
+      b.vx += (Math.random() - 0.5) * 0.3;
+      b.vy += (Math.random() - 0.5) * 0.3;
       b.vx *= b.friction;
       b.vy *= b.friction;
     }
@@ -699,7 +702,7 @@ function tick() {
 
   updateBacteria();
   handleEating();
-  maintainFood();
+  maintainFood(); // поддерживаем количество еды
 
   if (stats.tickCount % Math.round(1000 / TICK_INTERVAL) === 0) {
     saveState();
