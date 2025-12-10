@@ -332,7 +332,8 @@
       }
 
       const smoothed = [];
-      const alpha = 0.18; // коэффициент сглаживания (чем меньше, тем плавнее)
+      const alpha = 0.025; // ультра-сильное сглаживание
+      const maxStep = 6; // минимальный шаг смещения за кадр в координатах мира
 
       for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
@@ -340,8 +341,16 @@
           rp = { x: b.x, y: b.y };
           renderPositions.set(b.id, rp);
         } else {
-          rp.x += (b.x - rp.x) * alpha;
-          rp.y += (b.y - rp.y) * alpha;
+          let dx = b.x - rp.x;
+          let dy = b.y - rp.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0;
+          if (dist > maxStep) {
+            const k = maxStep / dist;
+            dx *= k;
+            dy *= k;
+          }
+          rp.x += dx * alpha;
+          rp.y += dy * alpha;
         }
         smoothed.push({
           ...b,
@@ -359,9 +368,19 @@
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.06; // ещё мягче движение камеры
+          const lerp = 0.03; // ещё более мягкое движение камеры
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
+          // ограничиваем максимальное смещение камеры за кадр, чтобы не было рывков
+          const maxCamStep = 20;
+          const dcx = target.x - cameraX;
+          const dcy = target.y - cameraY;
+          const camDist = Math.sqrt(dcx * dcx + dcy * dcy) || 0;
+          if (camDist > maxCamStep) {
+            const kk = maxCamStep / camDist;
+            cameraX = target.x - dcx * kk;
+            cameraY = target.y - dcy * kk;
+          }
         } else {
           selectedBacteriumId = null;
         }
@@ -382,7 +401,7 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
-      // еда (без интерполяции, просто по текущим данным)
+      // еда
       ctx.save();
       for (const f of foodRaw) {
         const p = worldToScreen(f.x, f.y);
@@ -598,8 +617,8 @@
       }
     }
 
-    // почаще можем не делать — сглаживание и так выравнивает рывки
-    setInterval(fetchState, 250);
+    // более частое обновление состояния + сильное сглаживание
+    setInterval(fetchState, 120); // чаще обновляем состояние
 
     // стартуем
     fetchState();
