@@ -214,7 +214,6 @@
     let bacteria = [];
     let food = [];
     let lastServerOk = false;
-    let prevPositions = new Map();
 
     toggleDetailsBtn.addEventListener("click", () => {
       showDetails = !showDetails;
@@ -308,12 +307,6 @@
       }
       ctx.restore();
 
-      // обновляем карту предыдущих позиций для глаз
-      prevPositions.clear();
-      for (const b of bacteria) {
-        prevPositions.set(b.id, { x: b.x, y: b.y });
-      }
-
 
       // бактерии
       ctx.save();
@@ -331,40 +324,6 @@
         ctx.shadowColor = ctx.fillStyle;
         ctx.fill();
         ctx.shadowBlur = 0;
-
-        // глаз (зрачок смотрит по направлению движения)
-        const eyeRadius = radius * 0.4;
-        const pupilRadius = eyeRadius * 0.45;
-        const eyeX = p.x + radius * 0.3;
-        const eyeY = p.y - radius * 0.3;
-
-        // направление движения считаем по разнице позиции между кадрами
-        let dirX = 1;
-        let dirY = 0;
-        const prev = prevPositions.get(b.id);
-        if (prev) {
-          const dx = b.x - prev.x;
-          const dy = b.y - prev.y;
-          const len = Math.hypot(dx, dy);
-          if (len > 0.01) {
-            dirX = dx / len;
-            dirY = dy / len;
-          }
-        }
-
-        ctx.beginPath();
-        ctx.arc(eyeX, eyeY, eyeRadius, 0, Math.PI * 2);
-        ctx.fillStyle = "#ffffff";
-        ctx.fill();
-
-        const pupilOffset = eyeRadius * 0.35;
-        const pupilX = eyeX + dirX * pupilOffset;
-        const pupilY = eyeY + dirY * pupilOffset;
-
-        ctx.beginPath();
-        ctx.arc(pupilX, pupilY, pupilRadius, 0, Math.PI * 2);
-        ctx.fillStyle = "#000000";
-        ctx.fill();
 
         // кольцо лидера
         if (b.isLeader) {
@@ -405,7 +364,7 @@
           ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
           ctx.fillText(`Возраст: ${b.ageYears.toFixed(2)} лет`, p.x, startY + lineH);
           ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
-          ctx.fillText(`Размер: ${b.size.toFixed(1)}`, p.x, startY + lineH * 3);
+          ctx.fillText(`Размер: ${Math.round(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
           ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
           ctx.fillText(`Детей: ${b.childrenCount}`, p.x, startY + lineH * 5);
           if (b.isLeader) {
