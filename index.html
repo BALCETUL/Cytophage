@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cytophage — 24/7 мир</title>
+  <title>Cytophage — семейный мир</title>
   <style>
     html, body {
       margin: 0;
@@ -34,7 +34,7 @@
       border-radius: 8px;
       font-size: 12px;
       pointer-events: none;
-      max-width: 260px;
+      max-width: 360px;
     }
     .hud strong {
       color: #7ee787;
@@ -47,15 +47,15 @@
 <body>
   <canvas id="canvas"></canvas>
   <div class="hud">
-    <div><strong>Cytophage — 24/7 мир</strong></div>
-    <div class="row">ЛКМ — двигать карту</div>
-    <div class="row">Колесо — зум</div>
+    <div><strong>Cytophage — семейный мир</strong></div>
+    <div class="row">ЛКМ — двигать карту, колесо — зум</div>
     <div class="row" id="stats"></div>
   </div>
 
   <script>
-    const SERVER_URL = "https://cytophage.onrender.com";
-
+    // ЗАМЕНИ ЭТУ СТРОКУ на свой Render-URL:
+    // например: const SERVER_URL = "https://cytophage.onrender.com";
+    const SERVER_URL = "http://localhost:3000";
 
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -147,6 +147,7 @@
       ctx.fillStyle = "#020409";
       ctx.fillRect(0, 0, width, height);
 
+      // границы мира
       ctx.save();
       ctx.lineWidth = 2;
       ctx.strokeStyle = "rgba(120, 255, 120, 0.6)";
@@ -157,6 +158,7 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
+      // еда
       ctx.save();
       for (const f of food) {
         const p = worldToScreen(f.x, f.y);
@@ -169,42 +171,47 @@
       }
       ctx.restore();
 
+      // бактерии
       ctx.save();
       for (const b of bacteria) {
         const p = worldToScreen(b.x, b.y);
-        if (p.x < -60 || p.y < -60 || p.x > width + 60 || p.y > height + 60) continue;
+        if (p.x < -80 || p.y < -80 || p.x > width + 80 || p.y > height + 80) continue;
 
         const radius = Math.max(2, b.size * zoom);
 
+        // тело (цвет семьи)
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        const hue = 200 - (b.energy / b.maxEnergy) * 100;
-        ctx.fillStyle = `hsl(${hue}, 90%, 60%)`;
+        ctx.fillStyle = b.familyColor || "#58a6ff";
         ctx.shadowBlur = radius * 1.5;
         ctx.shadowColor = ctx.fillStyle;
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        const barWidth = radius * 2.4;
+        // полоска голода
+        const barWidth = radius * 2.6;
         const barHeight = 3;
         const barX = p.x - barWidth / 2;
         const barY = p.y - radius - 8;
 
-        ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+        ctx.fillStyle = "rgba(80, 80, 80, 0.6)";
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        const energyRatio = Math.max(0, Math.min(1, b.energy / b.maxEnergy));
-        ctx.fillStyle = "rgba(255, 255, 0, 0.85)";
-        ctx.fillRect(barX, barY, barWidth * energyRatio, barHeight);
+        const hungerRatio = Math.max(0, Math.min(1, b.hunger / b.maxHunger));
+        ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
+        ctx.fillRect(barX, barY, barWidth * hungerRatio, barHeight);
+
+        // имя + поколение + возраст
+        ctx.textAlign = "center";
 
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
-        ctx.textAlign = "center";
         ctx.fillText(b.name, p.x, barY - 3);
 
         ctx.fillStyle = "#7ee787";
         ctx.font = "9px system-ui";
-        ctx.fillText("gen " + (b.generation ?? 0), p.x, barY - 13);
+        const ageText = b.ageYears !== undefined ? `gen ${Math.floor(b.generation)} · ${b.ageYears.toFixed(1)}y` : `gen ${Math.floor(b.generation)}`;
+        ctx.fillText(ageText, p.x, barY - 13);
       }
       ctx.restore();
     }
@@ -222,17 +229,27 @@
 
         const count = bacteria.length;
         const foodCount = food.length;
+
+        let maxGeneration = 0;
+        let maxAge = 0;
+        for (const b of bacteria) {
+          if (b.generation > maxGeneration) maxGeneration = b.generation;
+          if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
+        }
+
         let txt = `Бактерий: ${count} | Еды: ${foodCount} | Мир: ${world.width}×${world.height}`;
         if (lastStats) {
           txt += ` | Родилось: ${lastStats.totalBorn} | Умерло: ${lastStats.totalDied}`;
         }
+        txt += ` | Макс. поколение: ${Math.floor(maxGeneration)} | Макс. возраст: ${maxAge.toFixed(1)}y`;
+
         statsEl.textContent = txt;
       } catch (err) {
         statsEl.textContent = "Нет связи с сервером (" + err.message + ")";
       }
     }
 
-    setInterval(fetchState, 100);
+    setInterval(fetchState, 200);
     function loop() {
       draw();
       requestAnimationFrame(loop);
