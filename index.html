@@ -234,7 +234,6 @@
     // сглаженные позиции (чтобы не дёргалось)
     // id -> { x, y }
     const renderPositions = new Map();
-    let needResetPositions = false;
 
     let selectedBacteriumId = null;
 
@@ -324,12 +323,6 @@
     }
 
     function getRenderBacteriaList() {
-      // если нужно жёстко обновить позиции (например, после возврата во вкладку)
-      if (needResetPositions) {
-        renderPositions.clear();
-        needResetPositions = false;
-      }
-
       // очищаем позиции для умерших
       const currentIds = new Set(bacteriaRaw.map(b => b.id));
       for (const id of renderPositions.keys()) {
@@ -375,7 +368,7 @@
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.03; // очень мягкое движение камеры
+          const lerp = 0.03; // ещё более мягкое движение камеры
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
           // ограничиваем максимальное смещение камеры за кадр, чтобы не было рывков
@@ -487,8 +480,8 @@
           ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
           ctx.fillText(`Возраст: ${ageLabel}`, p.x, startY + lineH);
           ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
-          ctx.fillText(`Размер: ${Math.floor(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
-          ctx.fillText(`Голод: ${Math.floor(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
+          ctx.fillText(`Размер: ${Math.round(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
+          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
           ctx.fillText(`Детей: ${b.childrenCount}`, p.x, startY + lineH * 5);
           if (b.isLeader) {
             ctx.fillStyle = "#ffa657";
@@ -626,18 +619,6 @@
 
     // более частое обновление состояния + сильное сглаживание
     setInterval(fetchState, 120); // чаще обновляем состояние
-
-    // при возврате во вкладку — сразу запрашиваем новое состояние и сбрасываем сглаживание
-    window.addEventListener("focus", () => {
-      needResetPositions = true;
-      fetchState();
-    });
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        needResetPositions = true;
-        fetchState();
-      }
-    });
 
     // стартуем
     fetchState();
