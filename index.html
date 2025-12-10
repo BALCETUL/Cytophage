@@ -36,30 +36,145 @@
       pointer-events: none;
       max-width: 360px;
     }
-    .hud strong {
-      color: #7ee787;
-    }
     .hud .row {
       margin-top: 3px;
+      white-space: nowrap;
+    }
+    .hud .row span.label {
+      display: inline-block;
+      min-width: 110px;
+      color: #8b949e;
+    }
+    .hud .row span.value {
+      display: inline-block;
+      min-width: 90px;
+    }
+    .server-row {
+      display: flex;
+      align-items: center;
+    }
+    .server-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: #6e7681;
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .server-ok {
+      background: #2ea043;
+      box-shadow: 0 0 8px rgba(46,160,67,0.9);
+    }
+    .server-bad {
+      background: #f85149;
+      box-shadow: 0 0 8px rgba(248,81,73,0.9);
+    }
+
+    .hud-right {
+      position: fixed;
+      right: 10px;
+      top: 10px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 8px;
+      font-size: 12px;
+      max-width: 260px;
+      pointer-events: none;
+    }
+    .hud-right-title {
+      font-weight: 600;
+      color: #79c0ff;
+      margin-bottom: 4px;
+    }
+    .leader-row {
+      margin-top: 3px;
+      border-bottom: 1px solid rgba(110,118,129,0.3);
+      padding-bottom: 2px;
+    }
+    .leader-row:last-child {
+      border-bottom: none;
+    }
+    .leader-main {
+      display: flex;
+      justify-content: space-between;
+    }
+    .leader-name {
+      font-weight: 500;
+    }
+    .leader-clan {
+      color: #8b949e;
+      margin-left: 4px;
+    }
+    .leader-info {
+      font-size: 11px;
+      color: #c9d1d9;
+    }
+
+    .controls {
+      position: fixed;
+      left: 10px;
+      bottom: 10px;
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .btn {
+      border: 1px solid #30363d;
+      background: rgba(13,17,23,0.9);
+      color: #e5e5e5;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: rgba(22,27,34,0.95);
+    }
+    .btn-active {
+      border-color: #2ea043;
+      box-shadow: 0 0 6px rgba(46,160,67,0.6);
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+
+  <!-- Левая панель: статус и общая инфа -->
   <div class="hud">
-    <div><strong>Cytophage — семейный мир</strong></div>
-    <div class="row">ЛКМ — двигать карту, колесо — зум</div>
-    <div class="row" id="stats"></div>
+    <div class="row server-row">
+      <div id="serverDot" class="server-dot"></div>
+      <div id="serverStatusText">Сервер: нет данных</div>
+    </div>
+    <div class="row" id="hudRow1"></div>
+    <div class="row" id="hudRow2"></div>
+    <div class="row" id="hudRow3"></div>
+  </div>
+
+  <!-- Правая панель: лидеры колоний -->
+  <div class="hud-right">
+    <div class="hud-right-title">Лидеры колоний</div>
+    <div id="leadersList"></div>
+  </div>
+
+  <!-- Кнопки управления -->
+  <div class="controls">
+    <button id="toggleDetails" class="btn">Показать детали бактерий</button>
   </div>
 
   <script>
-
-const SERVER_URL = "https://cytophage.onrender.com";
-
+    // Сразу твой Render-URL:
+    const SERVER_URL = "https://cytophage.onrender.com";
 
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    const statsEl = document.getElementById("stats");
+
+    const hudRow1 = document.getElementById("hudRow1");
+    const hudRow2 = document.getElementById("hudRow2");
+    const hudRow3 = document.getElementById("hudRow3");
+    const serverDot = document.getElementById("serverDot");
+    const serverStatusText = document.getElementById("serverStatusText");
+    const leadersListEl = document.getElementById("leadersList");
+    const toggleDetailsBtn = document.getElementById("toggleDetails");
 
     let width = window.innerWidth;
     let height = window.innerHeight;
@@ -85,6 +200,25 @@ const SERVER_URL = "https://cytophage.onrender.com";
     let dragStartY = 0;
     let cameraStartX = 0;
     let cameraStartY = 0;
+
+    let showDetails = false;
+    let lastStats = null;
+    let world = { width: worldWidth, height: worldHeight };
+    let bacteria = [];
+    let food = [];
+    let lastServerOk = false;
+
+    toggleDetailsBtn.addEventListener("click", () => {
+      showDetails = !showDetails;
+      toggleDetailsBtn.textContent = showDetails
+        ? "Скрыть детали бактерий"
+        : "Показать детали бактерий";
+      if (showDetails) {
+        toggleDetailsBtn.classList.add("btn-active");
+      } else {
+        toggleDetailsBtn.classList.remove("btn-active");
+      }
+    });
 
     canvas.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -131,11 +265,6 @@ const SERVER_URL = "https://cytophage.onrender.com";
       cameraY += worldBeforeZoomY - worldAfterZoomY;
     }, { passive: false });
 
-    let world = { width: worldWidth, height: worldHeight };
-    let bacteria = [];
-    let food = [];
-    let lastStats = null;
-
     function worldToScreen(x, y) {
       const sx = (x - cameraX) * zoom + width / 2;
       const sy = (y - cameraY) * zoom + height / 2;
@@ -179,7 +308,7 @@ const SERVER_URL = "https://cytophage.onrender.com";
 
         const radius = Math.max(2, b.size * zoom);
 
-        // тело (цвет семьи)
+        // тело (цвет клана)
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = b.familyColor || "#58a6ff";
@@ -187,6 +316,15 @@ const SERVER_URL = "https://cytophage.onrender.com";
         ctx.shadowColor = ctx.fillStyle;
         ctx.fill();
         ctx.shadowBlur = 0;
+
+        // кольцо лидера
+        if (b.isLeader) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         // полоска голода
         const barWidth = radius * 2.6;
@@ -201,7 +339,7 @@ const SERVER_URL = "https://cytophage.onrender.com";
         ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
         ctx.fillRect(barX, barY, barWidth * hungerRatio, barHeight);
 
-        // имя + поколение + возраст
+        // имя + поколение + возраст (кратко)
         ctx.textAlign = "center";
 
         ctx.fillStyle = "#ffffff";
@@ -210,10 +348,89 @@ const SERVER_URL = "https://cytophage.onrender.com";
 
         ctx.fillStyle = "#7ee787";
         ctx.font = "9px system-ui";
-        const ageText = b.ageYears !== undefined ? `gen ${Math.floor(b.generation)} · ${b.ageYears.toFixed(1)}y` : `gen ${Math.floor(b.generation)}`;
+        const ageText = b.ageYears !== undefined
+          ? `gen ${Math.floor(b.generation)} · ${b.ageYears.toFixed(1)} лет`
+          : `gen ${Math.floor(b.generation)}`;
         ctx.fillText(ageText, p.x, barY - 13);
+
+        // подробные таблички, если режим включён
+        if (showDetails) {
+          ctx.textAlign = "left";
+          const startY = barY - 25;
+          const lineH = 11;
+
+          ctx.font = "9px system-ui";
+          ctx.fillStyle = "#e6edf3";
+          ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x + radius + 6, startY);
+          ctx.fillText(`Возраст: ${b.ageYears.toFixed(2)} лет`, p.x + radius + 6, startY + lineH);
+          ctx.fillText(`Размер: ${b.size.toFixed(1)}`, p.x + radius + 6, startY + lineH * 2);
+          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x + radius + 6, startY + lineH * 3);
+          ctx.fillText(`Детей: ${b.childrenCount}`, p.x + radius + 6, startY + lineH * 4);
+          if (b.isLeader) {
+            ctx.fillStyle = "#ffa657";
+            ctx.fillText(`Лидер колонии`, p.x + radius + 6, startY + lineH * 5);
+          }
+        }
       }
       ctx.restore();
+    }
+
+    function updateLeftHud() {
+      const count = bacteria.length;
+      const foodCount = food.length;
+
+      let maxGeneration = 0;
+      let maxAge = 0;
+      for (const b of bacteria) {
+        if (b.generation > maxGeneration) maxGeneration = b.generation;
+        if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
+      }
+
+      const totalBorn = lastStats ? lastStats.totalBorn : 0;
+      const totalDied = lastStats ? lastStats.totalDied : 0;
+
+      hudRow1.innerHTML =
+        `<span class="label">Бактерий:</span><span class="value">${count}</span>` +
+        `<span class="label">Еда:</span><span class="value">${foodCount}</span>` +
+        `<span class="label">Мир:</span><span class="value">${world.width}×${world.height}</span>`;
+
+      hudRow2.innerHTML =
+        `<span class="label">Родилось:</span><span class="value">${totalBorn}</span>` +
+        `<span class="label">Умерло:</span><span class="value">${totalDied}</span>`;
+
+      hudRow3.innerHTML =
+        `<span class="label">Макс. поколение:</span><span class="value">${Math.floor(maxGeneration)}</span>` +
+        `<span class="label">Макс. возраст:</span><span class="value">${maxAge.toFixed(1)} лет</span>`;
+    }
+
+    function updateRightHud() {
+      const clanSize = new Map();
+      for (const b of bacteria) {
+        const id = b.familyId || 0;
+        clanSize.set(id, (clanSize.get(id) || 0) + 1);
+      }
+
+      const sorted = [...bacteria].sort((a, b) => (b.ageYears || 0) - (a.ageYears || 0));
+      const topN = sorted.slice(0, 5);
+
+      let html = "";
+      topN.forEach((b, idx) => {
+        const size = clanSize.get(b.familyId || 0) || 1;
+        const age = b.ageYears !== undefined ? b.ageYears.toFixed(2) : "?";
+        const clan = b.familyName || "нет";
+        const leaderMark = b.isLeader ? " ⭐" : "";
+        html += `<div class="leader-row">
+          <div class="leader-main">
+            <span class="leader-name">${idx + 1}. ${b.name}${leaderMark}</span>
+            <span class="leader-clan">${clan}</span>
+          </div>
+          <div class="leader-info">
+            Возраст: ${age} лет · В клане: ${size}
+          </div>
+        </div>`;
+      });
+
+      leadersListEl.innerHTML = html || "<div class='leader-info'>Пока нет бактерий</div>";
     }
 
     async function fetchState() {
@@ -227,29 +444,27 @@ const SERVER_URL = "https://cytophage.onrender.com";
         food = data.food || [];
         lastStats = data.stats || null;
 
-        const count = bacteria.length;
-        const foodCount = food.length;
-
-        let maxGeneration = 0;
-        let maxAge = 0;
-        for (const b of bacteria) {
-          if (b.generation > maxGeneration) maxGeneration = b.generation;
-          if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
+        // сервер ок
+        if (!lastServerOk) {
+          lastServerOk = true;
+          serverDot.classList.remove("server-bad");
+          serverDot.classList.add("server-ok");
         }
+        serverStatusText.textContent = "Сервер: работает";
 
-        let txt = `Бактерий: ${count} | Еды: ${foodCount} | Мир: ${world.width}×${world.height}`;
-        if (lastStats) {
-          txt += ` | Родилось: ${lastStats.totalBorn} | Умерло: ${lastStats.totalDied}`;
-        }
-        txt += ` | Макс. поколение: ${Math.floor(maxGeneration)} | Макс. возраст: ${maxAge.toFixed(1)}y`;
-
-        statsEl.textContent = txt;
+        updateLeftHud();
+        updateRightHud();
       } catch (err) {
-        statsEl.textContent = "Нет связи с сервером (" + err.message + ")";
+        // сервер не отвечает
+        lastServerOk = false;
+        serverDot.classList.remove("server-ok");
+        serverDot.classList.add("server-bad");
+        serverStatusText.textContent = "Сервер: нет связи";
       }
     }
 
     setInterval(fetchState, 200);
+
     function loop() {
       draw();
       requestAnimationFrame(loop);
