@@ -21,7 +21,7 @@ const MS_PER_TICK = TICK_INTERVAL;
 const MS_PER_YEAR = 60 * 60 * 1000;
 const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
 
-// возрастные границы (в годах)
+// возрастные границы (в "годах")
 const ADULT_AGE_YEARS = 18;
 const BIRTH_COOLDOWN_YEARS = 5;
 const MIN_LIFESPAN_YEARS = 60;
@@ -29,12 +29,12 @@ const MAX_LIFESPAN_YEARS = 100;
 
 // голод
 const MAX_HUNGER = 1000;
-const BASE_HUNGER_DRAIN = 0.01; // за тик
-const HUNGER_DRAIN_PER_SIZE = 0.00002; // доп. расход от размера
-const FOOD_HUNGER_GAIN = 40; // сколько даёт одна еда
-const BIRTH_HUNGER_COST = 300; // сколько голода тратится на рождение ребёнка
+const BASE_HUNGER_DRAIN = 0.01;      // базовый расход за тик
+const HUNGER_DRAIN_PER_SIZE = 0.00002; // расход от размера
+const FOOD_HUNGER_GAIN = 40;         // сколько даёт одна еда
+const BIRTH_HUNGER_COST = 300;       // сколько голода тратится на ребёнка
 
-// ---- RANDOM HELPERS ----
+// ---- RANDOM ----
 function randRange(min, max) {
   return Math.random() * (max - min) + min;
 }
@@ -43,7 +43,7 @@ function randInt(min, max) {
   return Math.floor(randRange(min, max + 1));
 }
 
-// ---- NAMES LIST ----
+// ---- Имена бактерий ----
 const NAMES_LIST = [
   "Leonardo DiCaprio","Brad Pitt","Johnny Depp","Tom Hardy","Christian Bale",
   "Joaquin Phoenix","Robert De Niro","Al Pacino","Gary Oldman","Matt Damon",
@@ -58,6 +58,22 @@ function getRandomName() {
   return NAMES_LIST[index];
 }
 
+// ---- Имена кланов ----
+const COLONY_NAMES = [
+  "Альфа", "Бета", "Гамма", "Дельта", "Эхо",
+  "Омега", "Титаны", "Стражи", "Стая", "Легион",
+  "Искры", "Пламя", "Луна", "Солнце", "Тени",
+  "Волки", "Ястребы", "Космос", "Гроза", "Мираж"
+];
+
+function getColonyNameById(id) {
+  if (id >= 1 && id <= COLONY_NAMES.length) {
+    return COLONY_NAMES[id - 1];
+  }
+  // когда имена кончатся, будут Бродяги-N
+  return "Бродяги-" + id;
+}
+
 // ---- FAMILY SYSTEM ----
 let nextFamilyId = 1;
 
@@ -65,7 +81,8 @@ function createFamily() {
   const id = nextFamilyId++;
   const hue = randInt(0, 359);
   const color = `hsl(${hue}, 80%, 60%)`;
-  return { familyId: id, familyColor: color };
+  const name = getColonyNameById(id);
+  return { familyId: id, familyColor: color, familyName: name };
 }
 
 // ---- GLOBAL STATE ----
@@ -104,10 +121,12 @@ class Cytophage {
       parentId = null,
       familyId = null,
       familyColor = null,
+      familyName = null,
       ageTicks = 0,
       hunger = MAX_HUNGER * 0.5,
       lifespanYears = null,
-      lastBirthYear = 0
+      lastBirthYear = 0,
+      childrenCount = 0
     } = options;
 
     this.id = nextBacteriaId++;
@@ -127,16 +146,18 @@ class Cytophage {
     this.ageTicks = ageTicks;
     this.lifespanYears = lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS);
     this.lastBirthYear = lastBirthYear;
-    this.childrenCount = 0;
+    this.childrenCount = childrenCount;
 
     // семья
-    if (familyId && familyColor) {
+    if (familyId && familyColor && familyName) {
       this.familyId = familyId;
       this.familyColor = familyColor;
+      this.familyName = familyName;
     } else {
       const fam = createFamily();
       this.familyId = fam.familyId;
       this.familyColor = fam.familyColor;
+      this.familyName = fam.familyName;
     }
 
     this.generation = generation;
@@ -150,6 +171,9 @@ class Cytophage {
     this.size = 3;
     this.visionRadius = 250;
 
+    // флаг лидера (определяется отдельно)
+    this.isLeader = false;
+
     stats.totalBorn += 1;
     logEvent({
       type: "birth",
@@ -157,6 +181,7 @@ class Cytophage {
       parentId: this.parentId,
       generation: this.generation,
       familyId: this.familyId,
+      familyName: this.familyName,
       familyColor: this.familyColor,
       lifespanYears: this.lifespanYears,
       time: new Date().toISOString(),
@@ -219,27 +244,27 @@ function loadState() {
       ...data.stats
     };
 
-    // restore bacteria with new schema
     bacteriaArray = (data.bacteria || []).map(b => {
       const opts = {
         generation: b.generation ?? 0,
         parentId: b.parentId ?? null,
         familyId: b.familyId ?? null,
         familyColor: b.familyColor ?? null,
+        familyName: b.familyName ?? null,
         ageTicks: b.ageTicks ?? 0,
         hunger: typeof b.hunger === "number" ? b.hunger : MAX_HUNGER * 0.5,
         lifespanYears: b.lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS),
-        lastBirthYear: b.lastBirthYear ?? 0
+        lastBirthYear: b.lastBirthYear ?? 0,
+        childrenCount: b.childrenCount ?? 0
       };
       const c = new Cytophage(b.x ?? 0, b.y ?? 0, opts);
-      // переопределяем id и имя, чтобы сохранить старые
       c.id = b.id;
       c.name = b.name ?? c.name;
       c.vx = b.vx ?? c.vx;
       c.vy = b.vy ?? c.vy;
       c.size = b.size ?? c.size;
       c.visionRadius = b.visionRadius ?? c.visionRadius;
-      c.childrenCount = b.childrenCount ?? 0;
+      c.isLeader = b.isLeader ?? false;
       return c;
     });
 
@@ -249,13 +274,11 @@ function loadState() {
       return fp;
     });
 
-    // корректируем next ids
     const maxBId = bacteriaArray.reduce((m, b) => Math.max(m, b.id), 0);
     const maxFId = foodArray.reduce((m, f) => Math.max(m, f.id), 0);
     nextBacteriaId = Math.max(nextBacteriaId, maxBId + 1);
     nextFoodId = Math.max(nextFoodId, maxFId + 1);
 
-    // корректируем nextFamilyId
     const maxFamId = bacteriaArray.reduce((m, b) => Math.max(m, b.familyId || 0), 0);
     nextFamilyId = Math.max(nextFamilyId, maxFamId + 1, nextFamilyId);
 
@@ -308,13 +331,33 @@ function initWorld() {
 function distanceSq(ax, ay, bx, by) {
   const dx = bx - ax;
   const dy = by - ay;
-  return dx*dx + dy*dy;
+  return dx * dx + dy * dy;
 }
 
 // ---- FOOD LOGIC ----
 function maintainFood() {
   while (foodArray.length < TARGET_FOOD_COUNT) {
     spawnFoodRandom();
+  }
+}
+
+// ---- FAMILY LEADERS ----
+function updateFamilyLeaders() {
+  const bestByFamily = new Map();
+
+  for (const b of bacteriaArray) {
+    const famId = b.familyId || 0;
+    const age = b.ageYears;
+    const rec = bestByFamily.get(famId);
+    if (!rec || age > rec.ageYears) {
+      bestByFamily.set(famId, { id: b.id, ageYears: age });
+    }
+  }
+
+  for (const b of bacteriaArray) {
+    const famId = b.familyId || 0;
+    const info = bestByFamily.get(famId);
+    b.isLeader = info ? info.id === b.id : false;
   }
 }
 
@@ -329,7 +372,7 @@ function findBestFoodFor(bacteria) {
     if (distSq > visionRadiusSq) continue;
     const dist = Math.sqrt(distSq);
 
-    // небольшое предпочтение к еде, которая ближе к членам семьи
+    // бонус к еде возле семьи
     let familyBonus = 0;
     for (const other of bacteriaArray) {
       if (other === bacteria) continue;
@@ -353,6 +396,10 @@ function handleSeparationAndFamily(b) {
   let repelX = 0;
   let repelY = 0;
 
+  let leaderVecX = 0;
+  let leaderVecY = 0;
+  let leaderDist = Infinity;
+
   for (const other of bacteriaArray) {
     if (other === b) continue;
     const dx = b.x - other.x;
@@ -363,7 +410,7 @@ function handleSeparationAndFamily(b) {
     const dist = Math.sqrt(distSq);
     const minDist = (b.size + other.size) * 1.5;
 
-    // базовое отталкивание от всех
+    // отталкивание
     if (dist < minDist) {
       const nx = dx / dist;
       const ny = dy / dist;
@@ -377,7 +424,7 @@ function handleSeparationAndFamily(b) {
       repelY += nx * slideForce;
     }
 
-    // лёгкое притяжение к семье (чтобы семья не расползалась)
+    // притяжение к членам семьи (держатся вместе)
     if (other.familyId === b.familyId && dist > minDist && dist < 600) {
       const nx = -dx / dist;
       const ny = -dy / dist;
@@ -385,6 +432,25 @@ function handleSeparationAndFamily(b) {
       repelX += nx * famPull;
       repelY += ny * famPull;
     }
+
+    // запоминаем лидера семьи
+    if (other.familyId === b.familyId && other.isLeader) {
+      if (dist < leaderDist) {
+        leaderDist = dist;
+        leaderVecX = other.x - b.x;
+        leaderVecY = other.y - b.y;
+      }
+    }
+  }
+
+  // следуем за лидером, если мы не лидер
+  if (!b.isLeader && leaderDist < Infinity) {
+    const dist = leaderDist || 1;
+    const nx = leaderVecX / dist;
+    const ny = leaderVecY / dist;
+    const followStrength = 0.12;
+    b.vx += nx * followStrength;
+    b.vy += ny * followStrength;
   }
 
   b.vx += repelX * 0.1;
@@ -395,10 +461,9 @@ function maybeReproduce(b, newChildren) {
   const ageYears = b.ageYears;
 
   if (!b.isAdult) return;
-  if (b.hunger < MAX_HUNGER * 0.9) return; // нужно быть почти полностью сытым
+  if (b.hunger < MAX_HUNGER * 0.9) return; // быть почти полностью сытым
   if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
-  // создаём одного ребёнка
   const offset = 10;
   const childX = b.x + randRange(-offset, offset);
   const childY = b.y + randRange(-offset, offset);
@@ -408,6 +473,7 @@ function maybeReproduce(b, newChildren) {
     parentId: b.id,
     familyId: b.familyId,
     familyColor: b.familyColor,
+    familyName: b.familyName,
     hunger: MAX_HUNGER * 0.6,
     lastBirthYear: 0
   });
@@ -425,6 +491,7 @@ function maybeReproduce(b, newChildren) {
     childId: child.id,
     parentAgeYears: ageYears,
     familyId: b.familyId,
+    familyName: b.familyName,
     time: new Date().toISOString(),
     tick: stats.tickCount
   });
@@ -455,6 +522,7 @@ function updateBacteria() {
         ageYears,
         generation: b.generation,
         familyId: b.familyId,
+        familyName: b.familyName,
         time: new Date().toISOString(),
         tick: stats.tickCount
       });
@@ -473,16 +541,17 @@ function updateBacteria() {
         lifespanYears: b.lifespanYears,
         generation: b.generation,
         familyId: b.familyId,
+        familyName: b.familyName,
         time: new Date().toISOString(),
         tick: stats.tickCount
       });
       continue;
     }
 
-    // рождение (если условия подходят)
+    // рождение
     maybeReproduce(b, newChildren);
 
-    // отталкивание и притяжение семьи
+    // отталкивания, семья, лидер
     handleSeparationAndFamily(b);
 
     // поиск еды
@@ -498,14 +567,14 @@ function updateBacteria() {
       b.vx += (desiredVx - b.vx) * b.acceleration;
       b.vy += (desiredVy - b.vy) * b.acceleration;
     } else {
-      // лёгкое блуждание
+      // блуждание
       b.vx += (Math.random() - 0.5) * 0.2;
       b.vy += (Math.random() - 0.5) * 0.2;
       b.vx *= b.friction;
       b.vy *= b.friction;
     }
 
-    // ограничение скорости
+    // лимит скорости
     const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     if (speed > b.maxSpeed) {
       b.vx = (b.vx / speed) * b.maxSpeed;
@@ -533,7 +602,7 @@ function updateBacteria() {
       b.vy = -Math.abs(b.vy) * 0.9;
     }
 
-    // размер по возрасту: растёт до взрослого состояния
+    // размер по возрасту
     const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
     const baseSize = 4 + youthFactor * 10; // до ~14
     b.size = baseSize;
@@ -577,6 +646,9 @@ function tick() {
     return;
   }
 
+  // выбираем лидеров по возрасту
+  updateFamilyLeaders();
+
   updateBacteria();
   handleEating();
   maintainFood();
@@ -603,8 +675,10 @@ app.get("/state", (req, res) => {
       ageYears: b.ageYears,
       lifespanYears: b.lifespanYears,
       familyId: b.familyId,
+      familyName: b.familyName,
       familyColor: b.familyColor,
-      childrenCount: b.childrenCount
+      childrenCount: b.childrenCount,
+      isLeader: b.isLeader
     })),
     food: foodArray.map(f => ({
       id: f.id,
