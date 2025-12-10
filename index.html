@@ -235,8 +235,10 @@
     let showDetails = false;
     let lastStats = null;
     let lastServerOk = false;
-    let serverUptime = 0; // в секундах с сервера
-    let lastUptimeFetch = Date.now(); // когда последний раз получили uptime
+    
+    // UPTIME - просто храним последнее значение с сервера
+    let serverUptimeSeconds = 0;
+    let uptimeLastFetch = Date.now();
 
     // "сырые" данные с сервера
     let bacteriaRaw = [];
@@ -266,12 +268,11 @@
       return parts.join(' ');
     }
 
-    // Обновление таймера каждую секунду (плавное отображение между запросами к серверу)
-    let lastUptimeFetch = Date.now();
+    // Плавное обновление uptime между запросами
     setInterval(() => {
-      if (lastServerOk && serverUptime > 0) {
-        const elapsed = Math.floor((Date.now() - lastUptimeFetch) / 1000);
-        uptimeValue.textContent = formatUptime(serverUptime + elapsed);
+      if (lastServerOk && serverUptimeSeconds > 0) {
+        const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
+        uptimeValue.textContent = formatUptime(serverUptimeSeconds + elapsed);
       }
     }, 1000);
 
@@ -648,6 +649,7 @@
         updateLeftHud();
         updateRightHud();
       } catch (err) {
+        console.error("Ошибка fetchState:", err);
         lastServerOk = false;
         serverDot.classList.remove("server-ok");
         serverDot.classList.add("server-bad");
@@ -662,16 +664,16 @@
         const res = await fetch(SERVER_URL + "/ping", { cache: "no-cache" });
         const data = await res.json();
         if (data.uptime !== undefined) {
-          serverUptime = data.uptime;
-          lastUptimeFetch = Date.now();
-          uptimeValue.textContent = formatUptime(serverUptime);
+          serverUptimeSeconds = data.uptime;
+          uptimeLastFetch = Date.now();
+          uptimeValue.textContent = formatUptime(serverUptimeSeconds);
         }
       } catch (err) {
-        // Игнорируем ошибки
+        // Игнорируем ошибки uptime
       }
     }
 
-    // Обновляем uptime каждые 10 секунд с сервера
+    // Обновляем uptime каждые 10 секунд
     setInterval(fetchUptime, 10000);
 
     // более частое обновление состояния + сильное сглаживание
