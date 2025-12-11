@@ -22,8 +22,8 @@ const MS_PER_YEAR = 60 * 60 * 1000;
 const TICKS_PER_YEAR = MS_PER_YEAR / MS_PER_TICK;
 
 const ADULT_AGE_YEARS = 18;
-const REPRO_MIN_AGE_YEARS = 0.5;
-const BIRTH_COOLDOWN_YEARS = 5;
+const REPRO_MIN_AGE_YEARS = 0.5; // с этого возраста можно первый раз родить
+const BIRTH_COOLDOWN_YEARS = 1;  // кулдаун между СЛЕДУЮЩИМИ рождениями (было 5 - слишком долго!)
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
@@ -500,7 +500,7 @@ function maybeReproduce(b, newChildren) {
   try {
     const ageYears = b.ageYears;
 
-    // Проверка возраста
+    // Проверка минимального возраста
     if (ageYears < REPRO_MIN_AGE_YEARS) return;
     
     // ГЛАВНОЕ: размер должен быть максимальным (1000/1000)
@@ -511,8 +511,8 @@ function maybeReproduce(b, newChildren) {
     // Голод должен быть хотя бы 50
     if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
     
-    // Кулдаун между рождениями
-    if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
+    // Кулдаун между рождениями (НЕ применяется к первому рождению!)
+    if (b.childrenCount > 0 && ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
     // Малыш рождается РЯДОМ с родителем
     const offset = 15;
@@ -543,7 +543,7 @@ function maybeReproduce(b, newChildren) {
 
     newChildren.push(child);
 
-    console.log(`✨ Birth: ${child.name} (Gen ${child.generation}) from ${b.name} in clan ${familyName}`);
+    console.log(`✨ Birth: ${child.name} (Gen ${child.generation}) from ${b.name} (age ${ageYears.toFixed(1)}y) in clan ${familyName}`);
 
     logEvent({
       type: "reproduce",
