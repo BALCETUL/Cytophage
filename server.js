@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const https = require("https"); // ← ДОБАВЛЕНО для самопинга
+const https = require("https"); // для самопинга
 
 const app = express();
 app.use(cors());
@@ -27,18 +27,22 @@ const BIRTH_COOLDOWN_YEARS = 5;
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
+// голод (0–100)
 const MAX_HUNGER = 100;
 const BASE_HUNGER_DRAIN = 0.01;
 const HUNGER_DRAIN_PER_SIZE = 0.00005;
 const FOOD_HUNGER_GAIN = 5;
 const BIRTH_HUNGER_COST = 35;
+const MIN_HUNGER_TO_REPRODUCE = 50; // минимум 50 голода для размножения
 
+// рост / размер
 const MAX_SIZE_POINTS = 1000;
 const SIZE_GAIN_PER_FOOD = 1;
+const CHILD_START_SIZE = 20; // начальный размер новорожденного
 
-// ---- САМОПИНГ (НОВОЕ) ----
+// ---- САМОПИНГ ----
 const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
-const PING_INTERVAL = 10 * 60 * 1000; // 10 минут
+const PING_INTERVAL = 10 * 60 * 1000;
 let pingCount = 0;
 let lastPingTime = null;
 
@@ -493,59 +497,68 @@ function handleSeparationAndFamily(b) {
 }
 
 function maybeReproduce(b, newChildren) {
-  const ageYears = b.ageYears;
+  try {
+    const ageYears = b.ageYears;
 
-  // Проверка возраста
-  if (ageYears < REPRO_MIN_AGE_YEARS) return;
-  
-  // ГЛАВНОЕ: размер должен быть максимальным (1000/1000)
-  if ((b.sizePoints || 0) < (b.maxSizePoints || MAX_SIZE_POINTS)) return;
-  
-  // Голод должен быть хотя бы 50% (снизили требование с 90%)
-  if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
-  
-  // Кулдаун между рождениями
-  if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
+    // Проверка возраста
+    if (ageYears < REPRO_MIN_AGE_YEARS) return;
+    
+    // ГЛАВНОЕ: размер должен быть максимальным (1000/1000)
+    const currentSize = b.sizePoints || 0;
+    const maxSize = b.maxSizePoints || MAX_SIZE_POINTS;
+    if (currentSize < maxSize) return;
+    
+    // Голод должен быть хотя бы 50
+    if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
+    
+    // Кулдаун между рождениями
+    if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
-  // Малыш рождается РЯДОМ с родителем (маленький радиус)
-  const offset = 15;
-  const childX = b.x + randRange(-offset, offset);
-  const childY = b.y + randRange(-offset, offset);
+    // Малыш рождается РЯДОМ с родителем
+    const offset = 15;
+    const childX = b.x + randRange(-offset, offset);
+    const childY = b.y + randRange(-offset, offset);
 
-  // Малыш ВСЕГДА наследует клан родителя (НЕ создаём новый!)
-  const familyId = b.familyId;
-  const familyColor = b.familyColor;
-  const familyName = b.familyName;
+    // Малыш ВСЕГДА наследует клан родителя
+    const familyId = b.familyId;
+    const familyColor = b.familyColor;
+    const familyName = b.familyName;
 
-  // Создаём малыша с ФИКСИРОВАННЫМИ параметрами
-  const child = new Cytophage(childX, childY, {
-    generation: b.generation + 1,
-    parentId: b.id,
-    familyId,
-    familyColor,
-    familyName,
-    hunger: MAX_HUNGER,        // ПОЛНЫЙ желудок (100/100)
-    lastBirthYear: 0,
-    sizePoints: CHILD_START_SIZE  // ФИКСИРОВАННЫЙ размер (20/1000)
-  });
+    // Создаём малыша с ФИКСИРОВАННЫМИ параметрами
+    const child = new Cytophage(childX, childY, {
+      generation: b.generation + 1,
+      parentId: b.id,
+      familyId: familyId,
+      familyColor: familyColor,
+      familyName: familyName,
+      hunger: MAX_HUNGER,           // ПОЛНЫЙ желудок (100/100)
+      lastBirthYear: 0,
+      sizePoints: CHILD_START_SIZE  // ФИКСИРОВАННЫЙ размер (20/1000)
+    });
 
-  b.childrenCount += 1;
-  b.lastBirthYear = ageYears;
-  b.hunger -= BIRTH_HUNGER_COST;
-  if (b.hunger < 0) b.hunger = 0;
+    b.childrenCount += 1;
+    b.lastBirthYear = ageYears;
+    b.hunger -= BIRTH_HUNGER_COST;
+    if (b.hunger < 0) b.hunger = 0;
 
-  newChildren.push(child);
+    newChildren.push(child);
 
-  logEvent({
-    type: "reproduce",
-    parentId: b.id,
-    childId: child.id,
-    parentAgeYears: ageYears,
-    familyId,
-    familyName,
-    time: new Date().toISOString(),
-    tick: stats.tickCount
-  });
+    console.log(`✨ Birth: ${child.name} (Gen ${child.generation}) from ${b.name} in clan ${familyName}`);
+
+    logEvent({
+      type: "reproduce",
+      parentId: b.id,
+      childId: child.id,
+      parentAgeYears: ageYears,
+      familyId: familyId,
+      familyName: familyName,
+      time: new Date().toISOString(),
+      tick: stats.tickCount
+    });
+  } catch (err) {
+    console.error("❌ Error in maybeReproduce:", err);
+    // НЕ крашим сервер, просто логируем ошибку
+  }
 }
 
 function updateBacteria() {
@@ -553,100 +566,116 @@ function updateBacteria() {
   const newChildren = [];
 
   for (const b of bacteriaArray) {
-    b.ageTicks += 1;
-    const ageYears = b.ageYears;
+    try {
+      // возраст
+      b.ageTicks += 1;
+      const ageYears = b.ageYears;
 
-    const hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
-    b.hunger -= hungerDrain;
-    if (b.hunger < 0) b.hunger = 0;
+      // голод
+      const hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
+      b.hunger -= hungerDrain;
+      if (b.hunger < 0) b.hunger = 0;
 
-    if (b.hunger <= 0) {
-      deadIds.add(b.id);
-      stats.totalDied += 1;
-      logEvent({
-        type: "death",
-        id: b.id,
-        reason: "starvation",
-        ageYears,
-        generation: b.generation,
-        familyId: b.familyId,
-        familyName: b.familyName,
-        time: new Date().toISOString(),
-        tick: stats.tickCount
-      });
-      continue;
+      // смерть от голода
+      if (b.hunger <= 0) {
+        deadIds.add(b.id);
+        stats.totalDied += 1;
+        logEvent({
+          type: "death",
+          id: b.id,
+          reason: "starvation",
+          ageYears,
+          generation: b.generation,
+          familyId: b.familyId,
+          familyName: b.familyName,
+          time: new Date().toISOString(),
+          tick: stats.tickCount
+        });
+        continue;
+      }
+
+      // смерть от старости
+      if (ageYears >= b.lifespanYears) {
+        deadIds.add(b.id);
+        stats.totalDied += 1;
+        logEvent({
+          type: "death",
+          id: b.id,
+          reason: "old_age",
+          ageYears,
+          lifespanYears: b.lifespanYears,
+          generation: b.generation,
+          familyId: b.familyId,
+          familyName: b.familyName,
+          time: new Date().toISOString(),
+          tick: stats.tickCount
+        });
+        continue;
+      }
+
+      // рождение
+      maybeReproduce(b, newChildren);
+
+      // отталкивания, семья, лидер
+      handleSeparationAndFamily(b);
+
+      // поиск еды
+      const bestFood = findBestFoodFor(b);
+      if (bestFood) {
+        const dx = bestFood.x - b.x;
+        const dy = bestFood.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        const desiredVx = (dx / dist) * b.maxSpeed;
+        const desiredVy = (dy / dist) * b.maxSpeed;
+
+        b.vx += (desiredVx - b.vx) * b.acceleration;
+        b.vy += (desiredVy - b.vy) * b.acceleration;
+      } else {
+        b.vx += (Math.random() - 0.5) * 0.05;
+        b.vy += (Math.random() - 0.5) * 0.05;
+      }
+
+      // трение и ограничение скорости
+      b.vx *= b.friction;
+      b.vy *= b.friction;
+
+      const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+      if (speed > b.maxSpeed) {
+        b.vx = (b.vx / speed) * b.maxSpeed;
+        b.vy = (b.vy / speed) * b.maxSpeed;
+      }
+
+      // движение
+      b.x += b.vx;
+      b.y += b.vy;
+
+      // границы мира
+      if (b.x < 0) {
+        b.x = 0;
+        b.vx = Math.abs(b.vx) * 0.5;
+      } else if (b.x > world.width) {
+        b.x = world.width;
+        b.vx = -Math.abs(b.vx) * 0.5;
+      }
+
+      if (b.y < 0) {
+        b.y = 0;
+        b.vy = Math.abs(b.vy) * 0.5;
+      } else if (b.y > world.height) {
+        b.y = world.height;
+        b.vy = -Math.abs(b.vy) * 0.5;
+      }
+
+      // размер зависит от возраста и накопленного роста
+      const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
+      const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
+      const baseSize = 4 + youthFactor * 8 + foodFactor * 10;
+      b.size = baseSize;
+    } catch (err) {
+      console.error(`❌ Error processing bacteria ${b.id}:`, err);
+      // НЕ крашим сервер, просто пропускаем эту бактерию
     }
-
-    if (ageYears >= b.lifespanYears) {
-      deadIds.add(b.id);
-      stats.totalDied += 1;
-      logEvent({
-        type: "death",
-        id: b.id,
-        reason: "old_age",
-        ageYears,
-        lifespanYears: b.lifespanYears,
-        generation: b.generation,
-        familyId: b.familyId,
-        familyName: b.familyName,
-        time: new Date().toISOString(),
-        tick: stats.tickCount
-      });
-      continue;
-    }
-
-    maybeReproduce(b, newChildren);
-
-    handleSeparationAndFamily(b);
-
-    const bestFood = findBestFoodFor(b);
-    if (bestFood) {
-      const dx = bestFood.x - b.x;
-      const dy = bestFood.y - b.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-
-      const desiredVx = (dx / dist) * b.maxSpeed;
-      const desiredVy = (dy / dist) * b.maxSpeed;
-
-      b.vx += (desiredVx - b.vx) * b.acceleration;
-      b.vy += (desiredVy - b.vy) * b.acceleration;
-    } else {
-      b.vx += (Math.random() - 0.5) * 0.05;
-      b.vy += (Math.random() - 0.5) * 0.05;
-    }
-
-    b.vx *= b.friction;
-    b.vy *= b.friction;
-
-    const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-    if (speed > b.maxSpeed) {
-      b.vx = (b.vx / speed) * b.maxSpeed;
-      b.vy = (b.vy / speed) * b.maxSpeed;
-    }
-
-    b.x += b.vx;
-    b.y += b.vy;
-
-    if (b.x < 0) {
-      b.x = 0;
-      b.vx = Math.abs(b.vx) * 0.5;
-    } else if (b.x > world.width) {
-      b.x = world.width;
-      b.vx = -Math.abs(b.vx) * 0.5;
-    }
-
-    if (b.y < 0) {
-      b.y = 0;
-      b.vy = Math.abs(b.vy) * 0.5;
-    } else if (b.y > world.height) {
-      b.y = world.height;
-      b.vy = -Math.abs(b.vy) * 0.5;
-    }
-
-    const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
-    const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
-    const baseSize = 4 + youthFactor * 8 + foodFactor * 10;
-    b.size = baseSize;
   }
 
   if (deadIds.size > 0 || newChildren.length > 0) {
@@ -681,26 +710,30 @@ function handleEating() {
 
 // ---- MAIN TICK ----
 function tick() {
-  stats.tickCount += 1;
+  try {
+    stats.tickCount += 1;
 
-  if (bacteriaArray.length === 0) {
-    initWorld();
-    saveState();
-    return;
-  }
+    if (bacteriaArray.length === 0) {
+      initWorld();
+      saveState();
+      return;
+    }
 
-  updateFamilyLeaders();
-  updateBacteria();
-  handleEating();
-  maintainFood();
+    updateFamilyLeaders();
+    updateBacteria();
+    handleEating();
+    maintainFood();
 
-  if (stats.tickCount % Math.round(1000 / TICK_INTERVAL) === 0) {
-    saveState();
+    if (stats.tickCount % Math.round(1000 / TICK_INTERVAL) === 0) {
+      saveState();
+    }
+  } catch (err) {
+    console.error("❌ Critical error in tick:", err);
+    // НЕ крашим сервер
   }
 }
 
 // ---- API ----
-// НОВЫЙ ENDPOINT для самопинга
 app.get("/ping", (req, res) => {
   res.status(200).json({ 
     status: 'alive',
@@ -762,10 +795,9 @@ app.listen(PORT, () => {
   console.log(`Cytophage world server running on port ${PORT}`);
   console.log(`Server URL: ${SERVER_URL}`);
   
-  // Запуск самопинга через 2 минуты после старта
   setTimeout(() => {
     console.log('🚀 Self-ping system started');
-    selfPing(); // Первый пинг сразу
-    setInterval(selfPing, PING_INTERVAL); // Затем каждые 10 минут
+    selfPing();
+    setInterval(selfPing, PING_INTERVAL);
   }, 2 * 60 * 1000);
 });
