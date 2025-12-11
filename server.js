@@ -15,6 +15,8 @@ const EVENTS_FILE = path.join(__dirname, "events.log");
 const WORLD_WIDTH = 8000;
 const WORLD_HEIGHT = 8000;
 const TARGET_FOOD_COUNT = 8000;
+// сколько максимум кусочков еды добавляем за один тик (можешь менять)
+const FOOD_RESPAWN_PER_TICK = 50;
 const TICK_INTERVAL = 80; // ms
 const MS_PER_TICK = TICK_INTERVAL;
 
@@ -380,7 +382,12 @@ function distanceSq(ax, ay, bx, by) {
 
 // ---- FOOD LOGIC ----
 function maintainFood() {
-  while (foodArray.length < TARGET_FOOD_COUNT) {
+  const deficit = TARGET_FOOD_COUNT - foodArray.length;
+  if (deficit <= 0) return;
+
+  // респавним еду порциями, а не всю сразу до 8000
+  const spawnNow = Math.min(FOOD_RESPAWN_PER_TICK, deficit);
+  for (let i = 0; i < spawnNow; i++) {
     spawnFoodRandom();
   }
 }
