@@ -70,10 +70,6 @@
       background: #f85149;
       box-shadow: 0 0 8px rgba(248,81,73,0.9);
     }
-    .uptime-value {
-      color: #79c0ff;
-      font-weight: 500;
-    }
 
     .hud-right {
       position: fixed;
@@ -170,10 +166,6 @@
       <div id="serverDot" class="server-dot"></div>
       <div id="serverStatusText">Сервер: нет данных</div>
     </div>
-    <div class="row" id="uptimeRow">
-      <span class="label">Работает:</span>
-      <span class="uptime-value" id="uptimeValue">—</span>
-    </div>
     <div class="row" id="hudRow1"></div>
     <div class="row" id="hudRow2"></div>
     <div class="row" id="hudRow3"></div>
@@ -199,7 +191,6 @@
     const hudRow1 = document.getElementById("hudRow1");
     const hudRow2 = document.getElementById("hudRow2");
     const hudRow3 = document.getElementById("hudRow3");
-    const uptimeValue = document.getElementById("uptimeValue");
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
@@ -272,7 +263,8 @@
     setInterval(() => {
       if (lastServerOk && serverUptimeSeconds > 0) {
         const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
-        uptimeValue.textContent = formatUptime(serverUptimeSeconds + elapsed);
+        const uptime = formatUptime(serverUptimeSeconds + elapsed);
+        serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
       }
     }, 1000);
 
@@ -644,7 +636,15 @@
           serverDot.classList.remove("server-bad");
           serverDot.classList.add("server-ok");
         }
-        serverStatusText.textContent = "Сервер: работает";
+        
+        // Обновляем текст с временем работы
+        if (serverUptimeSeconds > 0) {
+          const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
+          const uptime = formatUptime(serverUptimeSeconds + elapsed);
+          serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
+        } else {
+          serverStatusText.textContent = "Сервер: работает";
+        }
 
         updateLeftHud();
         updateRightHud();
@@ -654,7 +654,6 @@
         serverDot.classList.remove("server-ok");
         serverDot.classList.add("server-bad");
         serverStatusText.textContent = "Сервер: нет связи";
-        uptimeValue.textContent = "—";
       }
     }
 
@@ -666,7 +665,10 @@
         if (data.uptime !== undefined) {
           serverUptimeSeconds = data.uptime;
           uptimeLastFetch = Date.now();
-          uptimeValue.textContent = formatUptime(serverUptimeSeconds);
+          const uptime = formatUptime(serverUptimeSeconds);
+          if (lastServerOk) {
+            serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
+          }
         }
       } catch (err) {
         // Игнорируем ошибки uptime
