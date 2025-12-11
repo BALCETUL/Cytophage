@@ -495,35 +495,38 @@ function handleSeparationAndFamily(b) {
 function maybeReproduce(b, newChildren) {
   const ageYears = b.ageYears;
 
+  // Проверка возраста
   if (ageYears < REPRO_MIN_AGE_YEARS) return;
+  
+  // ГЛАВНОЕ: размер должен быть максимальным (1000/1000)
   if ((b.sizePoints || 0) < (b.maxSizePoints || MAX_SIZE_POINTS)) return;
-  if (b.hunger < MAX_HUNGER * 0.9) return;
+  
+  // Голод должен быть хотя бы 50% (снизили требование с 90%)
+  if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
+  
+  // Кулдаун между рождениями
   if (ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
-  const offset = 10;
+  // Малыш рождается РЯДОМ с родителем (маленький радиус)
+  const offset = 15;
   const childX = b.x + randRange(-offset, offset);
   const childY = b.y + randRange(-offset, offset);
 
-  let familyId = b.familyId;
-  let familyColor = b.familyColor;
-  let familyName = b.familyName;
+  // Малыш ВСЕГДА наследует клан родителя (НЕ создаём новый!)
+  const familyId = b.familyId;
+  const familyColor = b.familyColor;
+  const familyName = b.familyName;
 
-  if (b.isLeader) {
-    const newFam = createFamily();
-    familyId = newFam.familyId;
-    familyColor = newFam.familyColor;
-    familyName = newFam.familyName;
-  }
-
+  // Создаём малыша с ФИКСИРОВАННЫМИ параметрами
   const child = new Cytophage(childX, childY, {
     generation: b.generation + 1,
     parentId: b.id,
     familyId,
     familyColor,
     familyName,
-    hunger: MAX_HUNGER * 0.6,
+    hunger: MAX_HUNGER,        // ПОЛНЫЙ желудок (100/100)
     lastBirthYear: 0,
-    sizePoints: Math.max(20, b.sizePoints * 0.5)
+    sizePoints: CHILD_START_SIZE  // ФИКСИРОВАННЫЙ размер (20/1000)
   });
 
   b.childrenCount += 1;
