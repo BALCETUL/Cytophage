@@ -257,8 +257,8 @@
       }
 
       const smoothed = [];
-      const alpha = 0.04; // УМЕНЬШЕНО для плавности
-      const maxStep = 8;  // УМЕНЬШЕНО
+      const alpha = 0.025; // КАК В СТАРОЙ ВЕРСИИ - ультра-плавно!
+      const maxStep = 6;   // КАК В СТАРОЙ ВЕРСИИ
 
       for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
@@ -288,9 +288,18 @@
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.04; // УМЕНЬШЕНО
+          const lerp = 0.03; // КАК В СТАРОЙ ВЕРСИИ
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
+          const maxCamStep = 20;
+          const dcx = target.x - cameraX;
+          const dcy = target.y - cameraY;
+          const camDist = Math.sqrt(dcx * dcx + dcy * dcy) || 0;
+          if (camDist > maxCamStep) {
+            const kk = maxCamStep / camDist;
+            cameraX = target.x - dcx * kk;
+            cameraY = target.y - dcy * kk;
+          }
         } else {
           selectedBacteriumId = null;
         }
@@ -638,7 +647,7 @@
     }
 
     setInterval(fetchUptime, 10000);
-    setInterval(fetchState, 120); // Оптимальный интервал
+    setInterval(fetchState, 120);
 
     fetchState();
     fetchUptime();
