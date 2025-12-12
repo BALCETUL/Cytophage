@@ -259,12 +259,6 @@
       <div id="leadersList"></div>
     </div>
   </div>
-
-  <!-- Кнопки управления -->
-  <div class="controls">
-    <button id="toggleDetails" class="btn">Показать детали бактерий</button>
-  </div>
-
   <script>
     const SERVER_URL = "https://cytophage.onrender.com";
 
@@ -277,8 +271,7 @@
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
-    const toggleDetailsBtn = document.getElementById("toggleDetails");
-    const detailPanel = document.getElementById("selectedBacteriumDetail");
+const detailPanel = document.getElementById("selectedBacteriumDetail");
     const detailContent = document.getElementById("detailContent");
 
     let width = window.innerWidth;
@@ -307,9 +300,7 @@
     let dragStartY = 0;
     let cameraStartX = 0;
     let cameraStartY = 0;
-
-    let showDetails = false;
-    let lastStats = null;
+let lastStats = null;
     let lastServerOk = false;
     
     // UPTIME - просто храним последнее значение с сервера
@@ -353,20 +344,7 @@
         serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
       }
     }, 1000);
-
-    toggleDetailsBtn.addEventListener("click", () => {
-      showDetails = !showDetails;
-      toggleDetailsBtn.textContent = showDetails
-        ? "Скрыть детали бактерий"
-        : "Показать детали бактерий";
-      if (showDetails) {
-        toggleDetailsBtn.classList.add("btn-active");
-      } else {
-        toggleDetailsBtn.classList.remove("btn-active");
-      }
-    });
-
-    canvas.addEventListener("mousedown", (e) => {
+canvas.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       isDragging = true;
       dragStartX = e.clientX;
@@ -630,27 +608,14 @@
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
-        ctx.fillText(b.name, p.x, barY - 3);
-
-        // подробные таблички, если включено (снизу)
-        if (showDetails) {
-          const startY = p.y + radius + 25;
-          const lineH = 11;
-
-          const ageLabel = formatAgeLabel(b.ageYears);
-          ctx.textAlign = "center";
-          ctx.font = "9px system-ui";
-          ctx.fillStyle = "#e6edf3";
-          ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
-          ctx.fillText(`Возраст: ${ageLabel}`, p.x, startY + lineH);
-          ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
-          ctx.fillText(`Размер: ${Math.round(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
-          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
-          ctx.fillText(`Потомков: ${b.childrenCount}`, p.x, startY + lineH * 5);
+        if (b.isLeader) {
+        if (b.isLeader) {
           if (b.isLeader) {
-            ctx.fillStyle = "#ffa657";
-            ctx.fillText(`Лидер колонии`, p.x, startY + lineH * 6);
-          }
+        if (b.isLeader) {
+          if (b.isLeader) ctx.fillText(b.name, p.x, barY - 3);
+        }
+        }
+        }
         }
       }
       ctx.restore();
