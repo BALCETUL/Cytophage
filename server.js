@@ -40,6 +40,18 @@ const MAX_SIZE_POINTS = 1000;
 const SIZE_GAIN_PER_FOOD = 1;
 const CHILD_START_SIZE = 20; // начальный размер новорожденного
 
+
+// ---- CLAN CIRCLE (server-side wall like in demo) ----
+// Радиус клана считается в координатах мира и применяется как "стена":
+// не-взрослые (sizePoints < 1000/1000) не могут покинуть круг лидера.
+const CLAN_RADIUS_BASE = 14;                 // базовый радиус (для клана из 1)
+const CLAN_RADIUS_PER_SQRT_MEMBER = 1.2;     // рост от размера клана (√N)
+const CLAN_RADIUS_MAX = 30;                  // максимальный радиус
+
+// Мягкая зона у края (доля радиуса), где тянем внутрь, чтобы стая держалась ровно.
+const CLAN_EDGE_SOFT_ZONE = 0.88;
+const CLAN_EDGE_PULL = 0.16;                 // сила возврата (в скорость)
+
 // ---- САМОПИНГ ----
 const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
 const PING_INTERVAL = 10 * 60 * 1000;
@@ -378,6 +390,119 @@ function distanceSq(ax, ay, bx, by) {
   return dx * dx + dy * dy;
 }
 
+
+// ---- CLAN HELPERS ----
+function calcClanRadius(memberCount) {
+  const n = Math.max(1, memberCount || 1);
+  const r = CLAN_RADIUS_BASE + Math.sqrt(n) * CLAN_RADIUS_PER_SQRT_MEMBER;
+  return Math.min(CLAN_RADIUS_MAX, r);
+}
+
+function buildFamilyInfo() {
+  const info = new Map(); // famId -> { count, leaderId, leaderX, leaderY, radius }
+  // counts
+  for (const b of bacteriaArray) {
+    const famId = b.familyId || 0;
+    const rec = info.get(famId) || { count: 0, leaderId: null, leaderX: 0, leaderY: 0, radius: CLAN_RADIUS_BASE };
+    rec.count += 1;
+    info.set(famId, rec);
+  }
+  // leaders + radius
+  for (const b of bacteriaArray) {
+    const famId = b.familyId || 0;
+    const rec = info.get(famId);
+    if (!rec) continue;
+    if (b.isLeader) {
+      rec.leaderId = b.id;
+      rec.leaderX = b.x;
+      rec.leaderY = b.y;
+    }
+  }
+  for (const [famId, rec] of info.entries()) {
+    rec.radius = calcClanRadius(rec.count);
+    info.set(famId, rec);
+  }
+  return info;
+}
+
+function detachToNewFamily(b) {
+  const fam = createFamily();
+  b.familyId = fam.familyId;
+  b.familyColor = fam.familyColor;
+  b.familyName = fam.familyName;
+
+  // После отделения он станет лидером своего клана.
+  b.isLeader = true;
+  b.isHeir = false;
+
+  // Инициализируем мету новой семьи (чтобы преемник не наследовал чужую семью после рестарта тика)
+  const meta = getFamilyMeta(b.familyId);
+  meta.leaderId = b.id;
+  meta.heirId = null;
+}
+
+
+function processAdultTransitions() {
+  // Предполагается, что updateFamilyLeaders() уже назначил преемника (b.isHeir=true).
+  for (const b of bacteriaArray) {
+    if (b.isLeader) continue;
+    if (isAdult(b) && !b.isHeir) {
+      detachToNewFamily(b);
+    }
+  }
+}
+
+
+function applyClanWall(b, familyInfo) {
+  // Лидер свободен (его "не тормозят" свои — это в handleSeparationAndFamily)
+  if (b.isLeader) return;
+
+  const currentSize = b.sizePoints || 0;
+  const maxSize = b.maxSizePoints || MAX_SIZE_POINTS;
+  const adult = currentSize >= maxSize;
+
+  // Взрослый может покинуть клан, если он НЕ выбран преемником.
+  // Преемник остаётся в семье и продолжает род (наследует лидерство).
+  if (adult && !b.isHeir) return;
+
+  const famId = b.familyId || 0;
+  const rec = familyInfo.get(famId);
+  if (!rec || rec.leaderId == null) return;
+
+  const r = rec.radius;
+  const dx = b.x - rec.leaderX;
+  const dy = b.y - rec.leaderY;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+
+  // мягкая зона — тянем внутрь
+  if (dist > r * CLAN_EDGE_SOFT_ZONE && dist <= r) {
+    const ux = dx / dist;
+    const uy = dy / dist;
+    b.vx -= ux * CLAN_EDGE_PULL;
+    b.vy -= uy * CLAN_EDGE_PULL;
+  }
+
+  // жёсткая стена — не даём выйти
+  if (dist > r) {
+    const ux = dx / dist;
+    const uy = dy / dist;
+
+    // ставим на границу
+    b.x = rec.leaderX + ux * r;
+    b.y = rec.leaderY + uy * r;
+
+    // убираем наружную компоненту скорости, чтобы не "проскальзывал"
+    const outward = b.vx * ux + b.vy * uy;
+    if (outward > 0) {
+      b.vx -= outward * ux;
+      b.vy -= outward * uy;
+    }
+    // небольшое демпфирование у стены
+    b.vx *= 0.75;
+    b.vy *= 0.75;
+  }
+}
+
 // ---- FOOD LOGIC ----
 function maintainFood() {
   while (foodArray.length < TARGET_FOOD_COUNT) {
@@ -386,24 +511,85 @@ function maintainFood() {
 }
 
 // ---- FAMILY LEADERS ----
-function updateFamilyLeaders() {
-  const bestByFamily = new Map();
+// Метаданные семей для "наследования" лидерства (преемник).
+// famId -> { leaderId: number|null, heirId: number|null }
+const familyMeta = new Map();
 
+function getFamilyMeta(famId) {
+  const id = famId || 0;
+  let m = familyMeta.get(id);
+  if (!m) {
+    m = { leaderId: null, heirId: null };
+    familyMeta.set(id, m);
+  }
+  return m;
+}
+
+function isAdult(b) {
+  const currentSize = b.sizePoints || 0;
+  const maxSize = b.maxSizePoints || MAX_SIZE_POINTS;
+  return currentSize >= maxSize;
+}
+
+function updateFamilyLeaders() {
+  // Группируем бактерий по семье
+  const membersByFam = new Map();
   for (const b of bacteriaArray) {
     const famId = b.familyId || 0;
-    const age = b.ageYears;
-    const rec = bestByFamily.get(famId);
-    if (!rec || age > rec.ageYears) {
-      bestByFamily.set(famId, { id: b.id, ageYears: age });
+    const arr = membersByFam.get(famId) || [];
+    arr.push(b);
+    membersByFam.set(famId, arr);
+  }
+
+  // Обновляем лидерство/преемника в каждой семье
+  for (const [famId, members] of membersByFam.entries()) {
+    const meta = getFamilyMeta(famId);
+
+    const byId = new Map();
+    for (const b of members) byId.set(b.id, b);
+
+    // 1) Определяем лидера (сначала пытаемся сохранить прежнего лидера)
+    let leader = meta.leaderId != null ? byId.get(meta.leaderId) : null;
+    if (!leader) {
+      // 2) Если лидера нет — пробуем повысить преемника
+      let heir = meta.heirId != null ? byId.get(meta.heirId) : null;
+      if (heir) {
+        leader = heir;
+        meta.leaderId = heir.id;
+      } else {
+        // 3) Фолбэк: самый старый (как было раньше)
+        leader = members.reduce((best, cur) => (cur.ageYears > best.ageYears ? cur : best), members[0]);
+        meta.leaderId = leader.id;
+      }
+    }
+
+    // Валидируем преемника
+    let heir = meta.heirId != null ? byId.get(meta.heirId) : null;
+    if (!heir || heir.id === meta.leaderId) {
+      meta.heirId = null;
+      heir = null;
+    }
+
+    // 4) Если преемник ещё не выбран — лидер выбирает взрослого кандидата (1000/1000)
+    if (!heir) {
+      const candidates = members.filter(b => b.id !== meta.leaderId && isAdult(b));
+      if (candidates.length > 0) {
+        // Выбор "умнее": сначала по сытости, затем по возрасту (можно поменять стратегию)
+        candidates.sort((a, b) => (b.hunger - a.hunger) || (b.ageYears - a.ageYears));
+        meta.heirId = candidates[0].id;
+      }
+    }
+
+    // Выставляем флаги
+    for (const b of members) {
+      b.isLeader = b.id === meta.leaderId;
+      b.isHeir = meta.heirId != null && b.id === meta.heirId;
     }
   }
 
-  for (const b of bacteriaArray) {
-    const famId = b.familyId || 0;
-    const info = bestByFamily.get(famId);
-    b.isLeader = info ? info.id === b.id : false;
-  }
+  // Семьи, которые исчезли, можно не чистить — они не мешают (будут перезаписаны при необходимости).
 }
+
 
 // ---- BACTERIA BEHAVIOUR ----
 function findBestFoodFor(bacteria) {
@@ -418,6 +604,8 @@ function findBestFoodFor(bacteria) {
 
     let familyBonus = 0;
     for (const other of bacteriaArray) {
+    // Лидер не должен "упираться" в своих соклановцев — игнорируем социальные силы со своими.
+    if (b.isLeader && other.familyId === b.familyId) continue;
       if (other === bacteria) continue;
       if (other.familyId !== bacteria.familyId) continue;
       const odSq = distanceSq(other.x, other.y, food.x, food.y);
@@ -682,10 +870,19 @@ function updateBacteria() {
     bacteriaArray = bacteriaArray.filter(b => !deadIds.has(b.id));
     bacteriaArray.push(...newChildren);
   }
+
+  // После обновления позиций — пересчитываем лидеров и применяем "стену".
+  // Так круг движется вместе с лидером, как в демо.
+  updateFamilyLeaders();
+  const wallInfo = buildFamilyInfo();
+  for (const b of bacteriaArray) {
+    applyClanWall(b, wallInfo);
+  }
 }
 
 // ---- FOOD EATING ----
-function handleEating() {
+function handleEating(familyInfo) {
+  familyInfo = familyInfo || buildFamilyInfo();
   const eatenFoodIds = new Set();
 
   for (const b of bacteriaArray) {
@@ -699,6 +896,25 @@ function handleEating() {
         if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
         b.sizePoints = (b.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
         if (b.sizePoints > b.maxSizePoints) b.sizePoints = b.maxSizePoints;
+
+        // лидер ест -> кормит соклановцев внутри кланового круга
+        if (b.isLeader) {
+          const rec = familyInfo.get(b.familyId || 0);
+          if (rec && rec.radius > 0) {
+            const rrSq = rec.radius * rec.radius;
+            for (const ally of bacteriaArray) {
+              if (ally === b) continue;
+              if (ally.familyId !== b.familyId) continue;
+              const dd = distanceSq(ally.x, ally.y, b.x, b.y);
+              if (dd <= rrSq) {
+                ally.hunger += FOOD_HUNGER_GAIN;
+                if (ally.hunger > ally.maxHunger) ally.hunger = ally.maxHunger;
+                ally.sizePoints = (ally.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
+                if (ally.sizePoints > ally.maxSizePoints) ally.sizePoints = ally.maxSizePoints;
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -719,9 +935,22 @@ function tick() {
       return;
     }
 
+    // 1) Пересчёт лидера/преемника перед движением
     updateFamilyLeaders();
+
+    // 2) Движение + "стена" клана (позиционное ограничение после движения)
     updateBacteria();
-    handleEating();
+
+    // 3) Поедание (лидер кормит соклановцев в круге)
+    const familyInfo = buildFamilyInfo();
+    handleEating(familyInfo);
+
+    // 4) После еды могли появиться взрослые (1000/1000) — лидер выбирает преемника,
+    // остальные взрослые отделяются в новые семьи.
+    updateFamilyLeaders();
+    processAdultTransitions();
+
+    // 5) Поддерживаем количество еды
     maintainFood();
 
     if (stats.tickCount % Math.round(1000 / TICK_INTERVAL) === 0) {
@@ -732,6 +961,7 @@ function tick() {
     // НЕ крашим сервер
   }
 }
+
 
 // ---- API ----
 app.get("/ping", (req, res) => {
@@ -747,6 +977,7 @@ app.get("/ping", (req, res) => {
 });
 
 app.get("/state", (req, res) => {
+  const familyInfo = buildFamilyInfo();
   res.json({
     world,
     stats,
@@ -767,7 +998,12 @@ app.get("/state", (req, res) => {
       familyName: b.familyName,
       familyColor: b.familyColor,
       childrenCount: b.childrenCount,
-      isLeader: b.isLeader
+      isLeader: b.isLeader,
+      isHeir: b.isHeir,
+      clanRadius: (() => {
+        const rec = familyInfo.get(b.familyId || 0);
+        return rec ? rec.radius : null;
+      })()
     })),
     food: foodArray.map(f => ({
       id: f.id,
