@@ -518,6 +518,52 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
+
+      // клановые круги вокруг лидеров (визуализация границы семьи)
+      ctx.save();
+      const famCounts = new Map();
+      for (const bb of renderBacteria) {
+        const fid = bb.familyId || 0;
+        famCounts.set(fid, (famCounts.get(fid) || 0) + 1);
+      }
+
+      for (const leader of renderBacteria) {
+        if (!leader.isLeader) continue;
+
+        const fid = leader.familyId || 0;
+        const count = famCounts.get(fid) || 1;
+
+        // радиус приходит с сервера; если вдруг нет — считаем по формуле (должно совпасть)
+        const fallbackR = 120 + Math.sqrt(count) * 20;
+        const rWorld = (typeof leader.clanRadius === "number" && leader.clanRadius > 0)
+          ? leader.clanRadius
+          : Math.min(320, fallbackR);
+
+        const p = worldToScreen(leader.x, leader.y);
+        const rScreen = rWorld * zoom;
+
+        // небольшая оптимизация: не рисуем круг, если он далеко за экраном
+        if (p.x + rScreen < -60 || p.y + rScreen < -60 || p.x - rScreen > width + 60 || p.y - rScreen > height + 60) {
+          continue;
+        }
+
+        const isSelectedLeader = (selectedBacteriumId === leader.id);
+
+        ctx.globalAlpha = isSelectedLeader ? 0.38 : 0.22;
+        ctx.lineWidth = isSelectedLeader ? 3 : 2;
+        ctx.strokeStyle = leader.familyColor || "rgba(255,255,255,0.6)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rScreen, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = isSelectedLeader ? 0.10 : 0.06;
+        ctx.fillStyle = leader.familyColor || "#58a6ff";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rScreen, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
       // еда
       ctx.save();
       for (const f of foodRaw) {
