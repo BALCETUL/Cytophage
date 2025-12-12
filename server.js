@@ -40,6 +40,16 @@ const MAX_SIZE_POINTS = 1000;
 const SIZE_GAIN_PER_FOOD = 1;
 const CHILD_START_SIZE = 20; // начальный размер новорожденного
 
+// ---- CLAN CIRCLE (family radius & rules) ----
+// Радиус клана (в координатах мира). Делаем заметно меньше, чем в демо.
+const CLAN_RADIUS_BASE = 120;
+const CLAN_RADIUS_PER_SQRT_MEMBER = 20;
+const CLAN_RADIUS_MAX = 320;
+// Начиная с этой доли радиуса, бактерии мягко «возвращаются» к лидеру
+const CLAN_EDGE_SOFT_ZONE = 0.85;
+// Сила возврата к лидеру у границы круга
+const CLAN_EDGE_PULL = 0.14;
+
 // ---- САМОПИНГ ----
 const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
 const PING_INTERVAL = 10 * 60 * 1000;
@@ -125,6 +135,53 @@ function createFamily() {
   const name = getColonyNameById(id);
   return { familyId: id, familyColor: color, familyName: name };
 }
+
+// familyId -> { leaderId, leaderRef, radius, members[] }
+let familyMeta = new Map();
+
+function computeClanRadius(memberCount) {
+  const count = Math.max(1, memberCount || 1);
+  const r = CLAN_RADIUS_BASE + Math.sqrt(count) * CLAN_RADIUS_PER_SQRT_MEMBER;
+  return Math.min(CLAN_RADIUS_MAX, r);
+}
+
+function recomputeFamilyMeta() {
+  const map = new Map();
+
+  // группируем по семье
+  for (const b of bacteriaArray) {
+    const famId = b.familyId || 0;
+    let rec = map.get(famId);
+    if (!rec) {
+      rec = { leaderId: null, leaderRef: null, radius: CLAN_RADIUS_BASE, members: [] };
+      map.set(famId, rec);
+    }
+    rec.members.push(b);
+    if (b.isLeader) {
+      rec.leaderId = b.id;
+      rec.leaderRef = b;
+    }
+  }
+
+  // радиусы и сервисные поля
+  for (const rec of map.values()) {
+    rec.radius = computeClanRadius(rec.members.length);
+
+    // если лидер не найден (теоретически), назначим первого
+    if (!rec.leaderRef && rec.members.length > 0) {
+      rec.leaderRef = rec.members[0];
+      rec.leaderId = rec.members[0].id;
+    }
+
+    for (const b of rec.members) {
+      b.leaderId = rec.leaderId;
+      b.clanRadius = rec.radius;
+    }
+  }
+
+  familyMeta = map;
+}
+
 
 // ---- GLOBAL STATE ----
 let world = {
@@ -306,6 +363,7 @@ function loadState() {
       c.size = b.size ?? c.size;
       c.visionRadius = b.visionRadius ?? c.visionRadius;
       c.isLeader = b.isLeader ?? false;
+      c.hasFoundedFamily = b.hasFoundedFamily ?? false;
       if (!c.familyName && c.familyId) {
         c.familyName = getColonyNameById(c.familyId);
       }
@@ -405,6 +463,32 @@ function updateFamilyLeaders() {
   }
 }
 
+
+// ---- FAMILY SPLIT (mature member becomes new family leader) ----
+function handleFamilyFounding() {
+  for (const b of bacteriaArray) {
+    if (b.isLeader) continue;
+    if (b.hasFoundedFamily) continue;
+
+    const cur = b.sizePoints || 0;
+    const max = b.maxSizePoints || MAX_SIZE_POINTS;
+    if (cur < max) continue;
+
+    // Создаём новую семью — бактерия становится лидером своей новой колонии
+    const fam = createFamily();
+    b.familyId = fam.familyId;
+    b.familyColor = fam.familyColor;
+    b.familyName = fam.familyName;
+
+    b.hasFoundedFamily = true;
+
+    // лёгкий импульс, чтобы она реально «ушла» и не stuck'алась в старой куче
+    b.vx += randRange(-0.8, 0.8);
+    b.vy += randRange(-0.8, 0.8);
+  }
+}
+
+
 // ---- BACTERIA BEHAVIOUR ----
 function findBestFoodFor(bacteria) {
   let bestFood = null;
@@ -445,6 +529,14 @@ function handleSeparationAndFamily(b) {
 
   for (const other of bacteriaArray) {
     if (other === b) continue;
+
+    const sameFamily = other.familyId === b.familyId;
+
+    // Лидер не должен «упираться» в своих — игнорируем физику от соклановцев
+    if (b.isLeader && sameFamily) {
+      continue;
+    }
+
     const dx = b.x - other.x;
     const dy = b.y - other.y;
     const distSq = dx * dx + dy * dy;
@@ -453,6 +545,7 @@ function handleSeparationAndFamily(b) {
     const dist = Math.sqrt(distSq);
     const minDist = (b.size + other.size) * 1.5;
 
+    // Разведение тел (коллизии)
     if (dist < minDist) {
       const nx = dx / dist;
       const ny = dy / dist;
@@ -466,7 +559,8 @@ function handleSeparationAndFamily(b) {
       repelY += nx * slideForce;
     }
 
-    if (other.familyId === b.familyId && dist > minDist && dist < 600) {
+    // «Семейная стяжка» (только внутри семьи)
+    if (sameFamily && dist > minDist && dist < 600) {
       const nx = -dx / dist;
       const ny = -dy / dist;
       const famPull = 0.03 * (1 - dist / 600);
@@ -474,7 +568,8 @@ function handleSeparationAndFamily(b) {
       repelY += ny * famPull;
     }
 
-    if (other.familyId === b.familyId && other.isLeader) {
+    // Вектор к лидеру семьи
+    if (sameFamily && other.isLeader) {
       if (dist < leaderDist) {
         leaderDist = dist;
         leaderVecX = other.x - b.x;
@@ -483,15 +578,47 @@ function handleSeparationAndFamily(b) {
     }
   }
 
+  // Следование за лидером + ограничение кругом клана (до роста 1000/1000)
   if (!b.isLeader && leaderDist < Infinity) {
     const dist = leaderDist || 1;
     const nx = leaderVecX / dist;
     const ny = leaderVecY / dist;
+
+    // мягкое следование (как было)
     const followStrength = 0.08;
     b.vx += nx * followStrength;
     b.vy += ny * followStrength;
+
+    // Клановый круг: пока бактерия не выросла до максимума — нельзя выходить за радиус лидера
+    const cur = b.sizePoints || 0;
+    const max = b.maxSizePoints || MAX_SIZE_POINTS;
+
+    if (cur < max) {
+      const meta = familyMeta.get(b.familyId || 0);
+      const clanR = meta ? meta.radius : CLAN_RADIUS_BASE;
+
+      // Жёсткий зажим: если вылетели за радиус — мгновенно возвращаем на границу
+      if (leaderDist > clanR) {
+        // координаты лидера
+        const leaderX = b.x + leaderVecX;
+        const leaderY = b.y + leaderVecY;
+
+        b.x = leaderX - nx * clanR;
+        b.y = leaderY - ny * clanR;
+
+        b.vx *= 0.35;
+        b.vy *= 0.35;
+      } else if (leaderDist > clanR * CLAN_EDGE_SOFT_ZONE) {
+        // у границы — «мягко» подтягиваем внутрь
+        const k = (leaderDist - clanR * CLAN_EDGE_SOFT_ZONE) / (clanR * (1 - CLAN_EDGE_SOFT_ZONE));
+        const pull = CLAN_EDGE_PULL * Math.max(0, Math.min(1, k));
+        b.vx += nx * pull;
+        b.vy += ny * pull;
+      }
+    }
   }
 
+  // финальный вклад социальных сил
   b.vx += repelX * 0.08;
   b.vy += repelY * 0.08;
 }
@@ -691,14 +818,39 @@ function handleEating() {
   for (const b of bacteriaArray) {
     for (const f of foodArray) {
       if (eatenFoodIds.has(f.id)) continue;
+
       const distSq = distanceSq(b.x, b.y, f.x, f.y);
       const eatRadius = b.size * 1.2;
+
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
+
+        // обычный профит для того, кто съел
         b.hunger += FOOD_HUNGER_GAIN;
         if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
+
         b.sizePoints = (b.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
         if (b.sizePoints > b.maxSizePoints) b.sizePoints = b.maxSizePoints;
+
+        // Лидер съел — кормим всех соклановцев, которые внутри кланового круга
+        if (b.isLeader) {
+          const meta = familyMeta.get(b.familyId || 0);
+          if (meta && meta.members && meta.members.length > 1) {
+            const r = meta.radius;
+            const rSq = r * r;
+            for (const other of meta.members) {
+              if (other === b) continue;
+              const odSq = distanceSq(b.x, b.y, other.x, other.y);
+              if (odSq > rSq) continue;
+
+              other.hunger += FOOD_HUNGER_GAIN;
+              if (other.hunger > other.maxHunger) other.hunger = other.maxHunger;
+
+              other.sizePoints = (other.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
+              if (other.sizePoints > other.maxSizePoints) other.sizePoints = other.maxSizePoints;
+            }
+          }
+        }
       }
     }
   }
@@ -719,8 +871,23 @@ function tick() {
       return;
     }
 
+    // 1) назначаем лидеров
     updateFamilyLeaders();
+
+    // 2) если кто-то вырос до 1000/1000 — он основывает новую семью
+    handleFamilyFounding();
+
+    // 3) после смены семей пересчитываем лидеров и мета-инфу
+    updateFamilyLeaders();
+    recomputeFamilyMeta();
+
+    // 4) симуляция движения/старения/рождения
     updateBacteria();
+
+    // 5) после удаления умерших — снова пересчёт (нужно для кормёжки и отображения радиуса)
+    recomputeFamilyMeta();
+
+    // 6) еда и поддержание экосистемы
     handleEating();
     maintainFood();
 
@@ -767,7 +934,10 @@ app.get("/state", (req, res) => {
       familyName: b.familyName,
       familyColor: b.familyColor,
       childrenCount: b.childrenCount,
-      isLeader: b.isLeader
+      isLeader: b.isLeader,
+      leaderId: b.leaderId,
+      clanRadius: b.clanRadius,
+      hasFoundedFamily: b.hasFoundedFamily
     })),
     food: foodArray.map(f => ({
       id: f.id,
