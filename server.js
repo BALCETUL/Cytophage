@@ -31,7 +31,7 @@ const MAX_LIFESPAN_YEARS = 100;
 const MAX_HUNGER = 100;
 const BASE_HUNGER_DRAIN = 0.01;
 const HUNGER_DRAIN_PER_SIZE = 0.00005;
-const ORPHAN_HUNGER_DRAIN = 2.0; // Сироты быстро умирают от голода
+const ORPHAN_HUNGER_DRAIN = 2.0;
 const FOOD_HUNGER_GAIN = 5;
 const BIRTH_HUNGER_COST = 35;
 const MIN_HUNGER_TO_REPRODUCE = 50;
@@ -41,18 +41,18 @@ const MAX_SIZE_POINTS = 1000;
 const SIZE_GAIN_PER_FOOD = 1;
 const CHILD_START_SIZE = 20;
 
-// Радиус клана
-const CLAN_RADIUS_BASE = 150;
-const CLAN_RADIUS_PER_SQRT_MEMBER = 20;
-const CLAN_RADIUS_MAX = 500;
-const LEADER_MAX_SIZE_BONUS = 1.5;
+// ---- РАДИУС КЛАНА (РАСТЕТ С РАЗМЕРОМ ЛИДЕРА!) ----
+const CLAN_RADIUS_MIN = 40;           // Минимальный радиус (лидер 20/1000)
+const CLAN_RADIUS_MAX = 500;          // Максимальный радиус (лидер 1000/1000 + много членов)
+const CLAN_RADIUS_LEADER_GROWTH = 260; // Рост от размера лидера (от 40 до 300)
+const CLAN_RADIUS_PER_SQRT_MEMBER = 12; // Бонус от количества членов
 
 // Стена круга
 const CLAN_EDGE_SOFT_ZONE = 0.85;
 const CLAN_EDGE_PULL = 0.2;
 
-// Преемник - лидер выбирает преемника в глубокой старости
-const SUCCESSION_AGE_THRESHOLD = 0.8; // 80% от lifespanYears
+// Преемник
+const SUCCESSION_AGE_THRESHOLD = 0.8;
 
 // ---- САМОПИНГ ----
 const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
@@ -140,16 +140,22 @@ let stats = {
   tickCount: 0
 };
 
-// Карта родитель -> дети
-let childrenMap = new Map(); // parentId -> Set(childId)
+let childrenMap = new Map();
 
-// ---- РАСЧЕТ РАДИУСА КЛАНА ----
-function computeClanRadius(memberCount, leaderIsMaxSize = false) {
-  let r = CLAN_RADIUS_BASE + Math.sqrt(Math.max(1, memberCount)) * CLAN_RADIUS_PER_SQRT_MEMBER;
-  if (leaderIsMaxSize) {
-    r *= LEADER_MAX_SIZE_BONUS;
-  }
-  return Math.min(CLAN_RADIUS_MAX, r);
+// ---- РАСЧЕТ РАДИУСА КЛАНА (РАСТЕТ С РАЗМЕРОМ ЛИДЕРА) ----
+function computeClanRadius(memberCount, leaderSizePoints = 20) {
+  // Фактор роста лидера: от 0 (при 20/1000) до 1 (при 1000/1000)
+  const leaderGrowthFactor = Math.max(0, Math.min(1, (leaderSizePoints - 20) / (MAX_SIZE_POINTS - 20)));
+  
+  // Базовый радиус растет с размером лидера
+  const baseRadius = CLAN_RADIUS_MIN + leaderGrowthFactor * CLAN_RADIUS_LEADER_GROWTH;
+  
+  // Бонус от количества членов клана
+  const memberBonus = Math.sqrt(Math.max(1, memberCount)) * CLAN_RADIUS_PER_SQRT_MEMBER;
+  
+  // Итоговый радиус с ограничением
+  const totalRadius = baseRadius + memberBonus;
+  return Math.min(CLAN_RADIUS_MAX, totalRadius);
 }
 
 function rebuildFamilyCircles() {
@@ -163,7 +169,7 @@ function rebuildFamilyCircles() {
       leaderId: null, 
       leaderX: 0, 
       leaderY: 0,
-      leaderIsMaxSize: false
+      leaderSizePoints: 20
     };
     rec.memberCount += 1;
     
@@ -171,14 +177,14 @@ function rebuildFamilyCircles() {
       rec.leaderId = b.id;
       rec.leaderX = b.x;
       rec.leaderY = b.y;
-      rec.leaderIsMaxSize = (b.sizePoints || 0) >= (b.maxSizePoints || MAX_SIZE_POINTS);
+      rec.leaderSizePoints = b.sizePoints || 20;
     }
     tmp.set(famId, rec);
   }
 
   for (const [famId, rec] of tmp.entries()) {
     if (rec.leaderId == null) continue;
-    rec.radius = computeClanRadius(rec.memberCount, rec.leaderIsMaxSize);
+    rec.radius = computeClanRadius(rec.memberCount, rec.leaderSizePoints);
     tmp.set(famId, rec);
   }
 
@@ -250,14 +256,13 @@ class Cytophage {
     this.visionRadius = 500;
     this.isLeader = false;
     this.hasBranched = false;
-    this.isSuccessor = false; // Выбран в преемники
-    this.isOrphaned = false; // Сирота (лидер умер)
-    this.childrenAlive = 0; // Живые дети
-    this.childrenDead = 0; // Мертвые дети
+    this.isSuccessor = false;
+    this.isOrphaned = false;
+    this.childrenAlive = 0;
+    this.childrenDead = 0;
 
     stats.totalBorn += 1;
     
-    // Регистрируем ребенка у родителя
     if (parentId) {
       if (!childrenMap.has(parentId)) {
         childrenMap.set(parentId, new Set());
@@ -367,7 +372,6 @@ function loadState() {
     const maxFamId = bacteriaArray.reduce((m, b) => Math.max(m, b.familyId || 0), 0);
     nextFamilyId = Math.max(nextFamilyId, maxFamId + 1);
 
-    // Восстанавливаем карту детей
     rebuildChildrenMap();
 
     console.log("World state loaded from file");
@@ -392,7 +396,6 @@ function rebuildChildrenMap() {
 }
 
 function updateChildrenStats() {
-  // Обновляем статистику живых/мертвых детей
   for (const b of bacteriaArray) {
     const children = childrenMap.get(b.id);
     if (!children) {
@@ -479,7 +482,6 @@ function updateFamilyLeaders() {
     const wasLeader = b.isLeader;
     b.isLeader = info ? info.id === b.id : false;
     
-    // Если стал лидером, снимаем статус преемника
     if (!wasLeader && b.isLeader) {
       b.isSuccessor = false;
     }
@@ -511,11 +513,9 @@ function maybeBranchAdult(b) {
 function maybeSelectSuccessor(leader) {
   if (!leader.isLeader) return;
   
-  // Проверяем возраст - только в глубокой старости
   const ageRatio = leader.ageYears / leader.lifespanYears;
   if (ageRatio < SUCCESSION_AGE_THRESHOLD) return;
   
-  // Проверяем, есть ли уже преемник в клане
   const hasSuccessor = bacteriaArray.some(b => 
     b.familyId === leader.familyId && 
     b.isSuccessor && 
@@ -523,7 +523,6 @@ function maybeSelectSuccessor(leader) {
   );
   if (hasSuccessor) return;
   
-  // Ищем кандидатов - те, кто достиг 1000/1000
   const candidates = bacteriaArray.filter(b => 
     b.familyId === leader.familyId && 
     b.id !== leader.id && 
@@ -533,7 +532,6 @@ function maybeSelectSuccessor(leader) {
   
   if (candidates.length === 0) return;
   
-  // Выбираем самого старшего
   candidates.sort((a, b) => b.ageYears - a.ageYears);
   const successor = candidates[0];
   
@@ -543,7 +541,6 @@ function maybeSelectSuccessor(leader) {
 
 // ---- ПРОВЕРКА СИРОТ ----
 function markOrphans() {
-  // Получаем все кланы с живыми лидерами
   const clansWithLeaders = new Set();
   for (const b of bacteriaArray) {
     if (b.isLeader) {
@@ -551,22 +548,21 @@ function markOrphans() {
     }
   }
   
-  // Помечаем сирот - тех, кто в клане без лидера и не достиг 1000/1000
   for (const b of bacteriaArray) {
     if (b.isLeader) continue;
-    if (isMaxSize(b)) continue; // Взрослые могут жить сами
+    if (isMaxSize(b)) continue;
     
     const hasLeader = clansWithLeaders.has(b.familyId);
     if (!hasLeader && !b.isOrphaned) {
       b.isOrphaned = true;
-      console.log(`💀 ${b.name} стал сиротой (клан без лидера)`);
+      console.log(`💀 ${b.name} стал сиротой`);
     }
   }
 }
 
 // ---- ФИЗИКА СТОЛКНОВЕНИЙ ----
 function handleCollisions(b) {
-  if (b.isLeader) return; // Лидер ИГНОРИРУЕТ столкновения
+  if (b.isLeader) return;
   
   let collisionX = 0;
   let collisionY = 0;
@@ -590,9 +586,7 @@ function handleCollisions(b) {
       const nx = dx / dist;
       const ny = dy / dist;
 
-      // Если другой - лидер того же клана, обходим его
       if (other.isLeader && other.familyId === b.familyId) {
-        // Сильное избегание лидера
         collisionX += nx * strength * 2;
         collisionY += ny * strength * 2;
       } else {
@@ -621,7 +615,7 @@ function enforceClanWalls() {
     const dx = b.x - rec.leaderX;
     const dy = b.y - rec.leaderY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const r = rec.radius || computeClanRadius(rec.memberCount || 1);
+    const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
 
     if (dist > r * CLAN_EDGE_SOFT_ZONE && dist <= r) {
       const ux = dx / dist;
@@ -650,7 +644,7 @@ function enforceClanWalls() {
 function feedFamilyFromLeader(leader) {
   const rec = getFamilyCircle(leader.familyId);
   if (!rec || rec.leaderId == null) return;
-  const r = rec.radius || computeClanRadius(rec.memberCount || 1);
+  const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
   const rSq = r * r;
 
   for (const other of bacteriaArray) {
@@ -749,10 +743,8 @@ function updateBacteria() {
       b.ageTicks += 1;
       const ageYears = b.ageYears;
 
-      // Голод
       let hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
       
-      // Сироты быстро умирают от голода
       if (b.isOrphaned) {
         hungerDrain += ORPHAN_HUNGER_DRAIN;
       }
@@ -760,7 +752,6 @@ function updateBacteria() {
       b.hunger -= hungerDrain;
       if (b.hunger < 0) b.hunger = 0;
 
-      // Смерть от голода
       if (b.hunger <= 0) {
         deadIds.add(b.id);
         stats.totalDied += 1;
@@ -775,7 +766,6 @@ function updateBacteria() {
         continue;
       }
 
-      // Смерть от старости
       if (ageYears >= b.lifespanYears) {
         deadIds.add(b.id);
         stats.totalDied += 1;
@@ -790,18 +780,14 @@ function updateBacteria() {
         continue;
       }
 
-      // Выбор преемника (только для лидеров в старости)
       if (b.isLeader) {
         maybeSelectSuccessor(b);
       }
 
-      // Размножение
       maybeReproduce(b, newChildren);
 
-      // Физика столкновений
       handleCollisions(b);
 
-      // Поиск еды (сироты НЕ могут есть)
       if (!b.isOrphaned) {
         const bestFood = findBestFoodFor(b);
         if (bestFood) {
@@ -819,12 +805,10 @@ function updateBacteria() {
           b.vy += (Math.random() - 0.5) * 0.08;
         }
       } else {
-        // Сироты бродят случайно
         b.vx += (Math.random() - 0.5) * 0.15;
         b.vy += (Math.random() - 0.5) * 0.15;
       }
 
-      // Трение
       b.vx *= b.friction;
       b.vy *= b.friction;
 
@@ -834,11 +818,9 @@ function updateBacteria() {
         b.vy = (b.vy / speed) * b.maxSpeed;
       }
 
-      // Движение
       b.x += b.vx;
       b.y += b.vy;
 
-      // Границы мира
       if (b.x < 0) {
         b.x = 0;
         b.vx = Math.abs(b.vx) * 0.5;
@@ -855,7 +837,6 @@ function updateBacteria() {
         b.vy = -Math.abs(b.vy) * 0.5;
       }
 
-      // Размер
       const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
       const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
       const baseSize = 4 + youthFactor * 8 + foodFactor * 12;
@@ -869,7 +850,6 @@ function updateBacteria() {
     bacteriaArray = bacteriaArray.filter(b => !deadIds.has(b.id));
     bacteriaArray.push(...newChildren);
     
-    // Обновляем карту детей
     rebuildChildrenMap();
   }
 }
@@ -879,7 +859,6 @@ function handleEating() {
   const eatenFoodIds = new Set();
 
   for (const b of bacteriaArray) {
-    // Сироты НЕ могут есть
     if (b.isOrphaned) continue;
     
     for (const f of foodArray) {
