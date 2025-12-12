@@ -74,7 +74,7 @@
       padding-bottom: 4px;
     }
     .detail-row .label {
-      color: #8b949e; display: inline-block; min-width: 90px;
+      color: #8b949e; display: inline-block; min-width: 100px;
     }
   </style>
 </head>
@@ -257,8 +257,8 @@
       }
 
       const smoothed = [];
-      const alpha = 0.025;
-      const maxStep = 6;
+      const alpha = 0.15; // Увеличено для плавности
+      const maxStep = 15; // Увеличено
 
       for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
@@ -288,18 +288,9 @@
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.03;
+          const lerp = 0.08; // Увеличено
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
-          const maxCamStep = 20;
-          const dcx = target.x - cameraX;
-          const dcy = target.y - cameraY;
-          const camDist = Math.sqrt(dcx * dcx + dcy * dcy) || 0;
-          if (camDist > maxCamStep) {
-            const kk = maxCamStep / camDist;
-            cameraX = target.x - dcx * kk;
-            cameraY = target.y - dcy * kk;
-          }
         } else {
           selectedBacteriumId = null;
         }
@@ -332,23 +323,17 @@
       ctx.restore();
 
       ctx.save();
-      const clanSize = new Map();
-      for (const bb of bacteriaRaw) {
-        const fid = bb.familyId || 0;
-        clanSize.set(fid, (clanSize.get(fid) || 0) + 1);
-      }
-
       for (const leader of renderBacteria) {
         if (!leader.isLeader) continue;
         const fid = leader.familyId || 0;
         if (!fid) continue;
 
-        const radiusWorld = leader.clanRadius || 120;
+        const radiusWorld = leader.clanRadius || 150;
         const p = worldToScreen(leader.x, leader.y);
         const radius = radiusWorld * zoom;
         if (p.x < -radius || p.y < -radius || p.x > width + radius || p.y > height + radius) continue;
 
-        const c = leader.familyColor || leader.color || "#58a6ff";
+        const c = leader.familyColor || "#58a6ff";
 
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = c;
@@ -376,7 +361,14 @@
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = b.familyColor || "#58a6ff";
+        
+        // Сироты - темнее
+        if (b.isOrphaned) {
+          ctx.fillStyle = "#555555";
+        } else {
+          ctx.fillStyle = b.familyColor || "#58a6ff";
+        }
+        
         ctx.shadowBlur = radius * 1.5;
         ctx.shadowColor = ctx.fillStyle;
         ctx.fill();
@@ -387,6 +379,14 @@
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
           ctx.beginPath();
           ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (b.isSuccessor) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 215, 0, 0.9)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 2, 0, Math.PI * 2);
           ctx.stroke();
         }
 
@@ -462,9 +462,11 @@
       }
 
       const leaders = [];
+      const successors = [];
       const others = [];
       for (const b of bacteriaRaw) {
         if (b.isLeader) leaders.push(b);
+        else if (b.isSuccessor) successors.push(b);
         else others.push(b);
       }
 
@@ -475,15 +477,16 @@
       };
 
       leaders.sort(byAgeDesc);
+      successors.sort(byAgeDesc);
       others.sort(byAgeDesc);
-      const all = leaders.concat(others);
+      const all = leaders.concat(successors).concat(others);
 
       let html = "";
       let index = 1;
       for (const b of all) {
         const ageLabel = formatAgeLabel(b.ageYears);
         const size = clanSize.get(b.familyId || 0) || 1;
-        const leaderMark = b.isLeader ? " ⭐" : "";
+        const leaderMark = b.isLeader ? " ⭐" : (b.isSuccessor ? " 👑" : "");
         const selectedClass = (selectedBacteriumId === b.id) ? " row-selected" : "";
         html += `<div class="leader-row${selectedClass}" data-id="${b.id}">
           <div class="leader-main">
@@ -512,12 +515,23 @@
       const maxSizePoints = b.maxSizePoints ?? 1000;
       const hunger = Math.round(b.hunger ?? 0);
       const maxHunger = b.maxHunger ?? 100;
-      const children = b.childrenCount ?? 0;
+      const childrenAlive = b.childrenAlive ?? 0;
+      const childrenDead = b.childrenDead ?? 0;
 
       const isLeader = !!b.isLeader;
-      const statusHtml = isLeader
-        ? '<span style="color:#ffeb3b; font-weight:600;">ЛИДЕР ⭐</span>'
-        : (b.familyId && b.familyId !== 0 ? 'Член клана' : 'Одиночка');
+      const isSuccessor = !!b.isSuccessor;
+      const isOrphaned = !!b.isOrphaned;
+      
+      let statusHtml;
+      if (isLeader) {
+        statusHtml = '<span style="color:#ffeb3b; font-weight:600;">ЛИДЕР ⭐</span>';
+      } else if (isSuccessor) {
+        statusHtml = '<span style="color:#ffd700; font-weight:600;">Выбран в преемники 👑</span>';
+      } else if (isOrphaned) {
+        statusHtml = '<span style="color:#ff4444; font-weight:600;">Сирота 💀</span>';
+      } else {
+        statusHtml = '<span style="color:#888;">Без статуса</span>';
+      }
 
       const clanName = b.familyName || "Нет";
       const clanColor = b.familyColor || "#58a6ff";
@@ -532,7 +546,7 @@
         <div class="detail-row"><span class="label">Поколение:</span> ${Math.floor(b.generation || 0)}</div>
         <div class="detail-row"><span class="label">Размер:</span> ${Math.round(sizePoints)}/${maxSizePoints}</div>
         <div class="detail-row"><span class="label">Голод:</span> ${hunger}/${maxHunger}</div>
-        <div class="detail-row"><span class="label">Потомков:</span> ${children}</div>
+        <div class="detail-row"><span class="label">Потомки:</span> Живы ${childrenAlive} - Умерли ${childrenDead}</div>
         <div class="detail-row"><span class="label">Координаты:</span> X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</div>
       `;
       detailPanel.style.display = "block";
@@ -625,7 +639,7 @@
     }
 
     setInterval(fetchUptime, 10000);
-    setInterval(fetchState, 120);
+    setInterval(fetchState, 150); // Увеличено для оптимизации
 
     fetchState();
     fetchUptime();
