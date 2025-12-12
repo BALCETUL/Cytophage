@@ -531,6 +531,45 @@
       }
       ctx.restore();
 
+      // КЛАНОВЫЙ КРУГ (стена от сервера): рисуем вокруг лидеров
+      ctx.save();
+      // размер клана по familyId (для fallback-радиуса)
+      const clanCounts = new Map();
+      for (const b of bacteriaRaw) {
+        const fid = b.familyId || 0;
+        clanCounts.set(fid, (clanCounts.get(fid) || 0) + 1);
+      }
+
+      for (const b of bacteriaRaw) {
+        if (!b.isLeader) continue;
+
+        const count = clanCounts.get(b.familyId || 0) || 1;
+
+        // если сервер прислал clanRadius — используем его (это "правильная" стена)
+        const rWorld =
+          typeof b.clanRadius === "number" && b.clanRadius > 0
+            ? b.clanRadius
+            : Math.min(150, 70 + Math.sqrt(count) * 6); // fallback (должен совпадать с server.js)
+
+        const p = worldToScreen(b.x, b.y);
+        const r = rWorld * zoom;
+
+        // не рисуем если круг совсем вне экрана
+        if (p.x + r < -50 || p.y + r < -50 || p.x - r > width + 50 || p.y - r > height + 50) continue;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+
+        // лёгкая заливка + граница, как "оберег"
+        ctx.fillStyle = "rgba(46, 160, 67, 0.08)";
+        ctx.strokeStyle = "rgba(46, 160, 67, 0.35)";
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+
+
       // бактерии
       ctx.save();
       for (const b of renderBacteria) {
