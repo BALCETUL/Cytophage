@@ -431,7 +431,10 @@
       const alpha = 0.025; // ультра-сильное сглаживание
       const maxStep = 6; // минимальный шаг смещения за кадр в координатах мира
 
-      for (const b of renderBacteria) {
+      // Источник истины для сглаживания — "сырые" данные с сервера.
+      // Раньше тут была ошибка: цикл шёл по несуществующей переменной
+      // `renderBacteria`, из‑за чего рендер падал и карта была пустой.
+      for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
         if (!rp) {
           rp = { x: b.x, y: b.y };
