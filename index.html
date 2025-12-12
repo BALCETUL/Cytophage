@@ -257,8 +257,8 @@
       }
 
       const smoothed = [];
-      const alpha = 0.15; // Увеличено для плавности
-      const maxStep = 15; // Увеличено
+      const alpha = 0.04; // УМЕНЬШЕНО для плавности
+      const maxStep = 8;  // УМЕНЬШЕНО
 
       for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
@@ -288,7 +288,7 @@
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.08; // Увеличено
+          const lerp = 0.04; // УМЕНЬШЕНО
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
         } else {
@@ -328,7 +328,7 @@
         const fid = leader.familyId || 0;
         if (!fid) continue;
 
-        const radiusWorld = leader.clanRadius || 150;
+        const radiusWorld = leader.clanRadius || 40;
         const p = worldToScreen(leader.x, leader.y);
         const radius = radiusWorld * zoom;
         if (p.x < -radius || p.y < -radius || p.x > width + radius || p.y > height + radius) continue;
@@ -362,7 +362,6 @@
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         
-        // Сироты - темнее
         if (b.isOrphaned) {
           ctx.fillStyle = "#555555";
         } else {
@@ -639,7 +638,7 @@
     }
 
     setInterval(fetchUptime, 10000);
-    setInterval(fetchState, 150); // Увеличено для оптимизации
+    setInterval(fetchState, 120); // Оптимальный интервал
 
     fetchState();
     fetchUptime();
