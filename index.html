@@ -259,13 +259,7 @@
       <div id="leadersList"></div>
     </div>
   </div>
-
-  <!-- Кнопки управления -->
-  <div class="controls">
-    <button id="toggleDetails" class="btn">Показать детали бактерий</button>
-  </div>
-
-  <script>
+<script>
     const SERVER_URL = "https://cytophage.onrender.com";
 
     const canvas = document.getElementById("canvas");
@@ -277,7 +271,6 @@
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
-    const toggleDetailsBtn = document.getElementById("toggleDetails");
     const detailPanel = document.getElementById("selectedBacteriumDetail");
     const detailContent = document.getElementById("detailContent");
 
@@ -307,8 +300,6 @@
     let dragStartY = 0;
     let cameraStartX = 0;
     let cameraStartY = 0;
-
-    let showDetails = false;
     let lastStats = null;
     let lastServerOk = false;
     
@@ -353,18 +344,6 @@
         serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
       }
     }, 1000);
-
-    toggleDetailsBtn.addEventListener("click", () => {
-      showDetails = !showDetails;
-      toggleDetailsBtn.textContent = showDetails
-        ? "Скрыть детали бактерий"
-        : "Показать детали бактерий";
-      if (showDetails) {
-        toggleDetailsBtn.classList.add("btn-active");
-      } else {
-        toggleDetailsBtn.classList.remove("btn-active");
-      }
-    });
 
     canvas.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -452,7 +431,7 @@
       const alpha = 0.025; // ультра-сильное сглаживание
       const maxStep = 6; // минимальный шаг смещения за кадр в координатах мира
 
-      for (const b of bacteriaRaw) {
+      for (const b of renderBacteria) {
         let rp = renderPositions.get(b.id);
         if (!rp) {
           rp = { x: b.x, y: b.y };
@@ -531,25 +510,23 @@
       }
       ctx.restore();
 
-      // КЛАНОВЫЙ КРУГ (стена от сервера): рисуем вокруг лидеров
+
+      // клановый круг (стена от сервера): рисуем вокруг лидеров (по сглаженным координатам)
       ctx.save();
-      // размер клана по familyId (для fallback-радиуса)
       const clanCounts = new Map();
-      for (const b of bacteriaRaw) {
+      for (const b of renderBacteria) {
         const fid = b.familyId || 0;
         clanCounts.set(fid, (clanCounts.get(fid) || 0) + 1);
       }
 
-      for (const b of bacteriaRaw) {
+      for (const b of renderBacteria) {
         if (!b.isLeader) continue;
-
         const count = clanCounts.get(b.familyId || 0) || 1;
 
-        // если сервер прислал clanRadius — используем его (это "правильная" стена)
         const rWorld =
           typeof b.clanRadius === "number" && b.clanRadius > 0
             ? b.clanRadius
-            : Math.min(150, 70 + Math.sqrt(count) * 6); // fallback (должен совпадать с server.js)
+            : Math.min(30, 14 + Math.sqrt(count) * 1.5); // fallback (должен совпадать с server.js)
 
         const p = worldToScreen(b.x, b.y);
         const r = rWorld * zoom;
@@ -559,8 +536,6 @@
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-
-        // лёгкая заливка + граница, как "оберег"
         ctx.fillStyle = "rgba(46, 160, 67, 0.08)";
         ctx.strokeStyle = "rgba(46, 160, 67, 0.35)";
         ctx.lineWidth = 2;
@@ -568,8 +543,6 @@
         ctx.stroke();
       }
       ctx.restore();
-
-
       // бактерии
       ctx.save();
       for (const b of renderBacteria) {
@@ -622,27 +595,8 @@
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
-        ctx.fillText(b.name, p.x, barY - 3);
-
-        // подробные таблички, если включено (снизу)
-        if (showDetails) {
-          const startY = p.y + radius + 25;
-          const lineH = 11;
-
-          const ageLabel = formatAgeLabel(b.ageYears);
-          ctx.textAlign = "center";
-          ctx.font = "9px system-ui";
-          ctx.fillStyle = "#e6edf3";
-          ctx.fillText(`Клан: ${b.familyName || "нет"}`, p.x, startY);
-          ctx.fillText(`Возраст: ${ageLabel}`, p.x, startY + lineH);
-          ctx.fillText(`Поколение: ${Math.floor(b.generation)}`, p.x, startY + lineH * 2);
-          ctx.fillText(`Размер: ${Math.round(b.sizePoints)}/${b.maxSizePoints}`, p.x, startY + lineH * 3);
-          ctx.fillText(`Голод: ${Math.round(b.hunger)}/${b.maxHunger}`, p.x, startY + lineH * 4);
-          ctx.fillText(`Потомков: ${b.childrenCount}`, p.x, startY + lineH * 5);
-          if (b.isLeader) {
-            ctx.fillStyle = "#ffa657";
-            ctx.fillText(`Лидер колонии`, p.x, startY + lineH * 6);
-          }
+        if (b.isLeader) {
+          ctx.fillText(b.name, p.x, barY - 3);
         }
       }
       ctx.restore();
