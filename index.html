@@ -3,241 +3,84 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cytophage — семейный мир</title>
+  <title>Cytophage — Семейный мир</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #020409;
-      overflow: hidden;
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #020409; overflow: hidden;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: #e5e5e5;
     }
     #canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
+      display: block; width: 100vw; height: 100vh;
       background: radial-gradient(circle at center, #050814 0%, #010206 60%, #000000 100%);
       cursor: grab;
     }
-    #canvas:active {
-      cursor: grabbing;
-    }
+    #canvas:active { cursor: grabbing; }
 
     .hud {
-      position: fixed;
-      left: 10px;
-      top: 10px;
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 8px;
-      font-size: 12px;
-      pointer-events: none;
-      max-width: 360px;
+      position: fixed; left: 10px; top: 10px; padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.6); border-radius: 8px; font-size: 12px;
+      pointer-events: none; max-width: 360px;
     }
-    .hud .row {
-      margin-top: 3px;
-      white-space: nowrap;
-    }
-    .hud .row span.label {
-      display: inline-block;
-      min-width: 110px;
-      color: #8b949e;
-    }
-    .hud .row span.value {
-      display: inline-block;
-      min-width: 90px;
-    }
-    .server-row {
-      display: flex;
-      align-items: center;
-    }
+    .hud .row { margin-top: 3px; white-space: nowrap; }
+    .hud .row span.label { display: inline-block; min-width: 110px; color: #8b949e; }
+    .hud .row span.value { display: inline-block; min-width: 90px; }
+    .server-row { display: flex; align-items: center; }
     .server-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-right: 6px;
-      background: #6e7681;
-      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+      width: 10px; height: 10px; border-radius: 50%; margin-right: 6px;
+      background: #6e7681; box-shadow: 0 0 4px rgba(0,0,0,0.8);
     }
-    .server-ok {
-      background: #2ea043;
-      box-shadow: 0 0 8px rgba(46,160,67,0.9);
-    }
-    .server-bad {
-      background: #f85149;
-      box-shadow: 0 0 8px rgba(248,81,73,0.9);
-    }
+    .server-ok { background: #2ea043; box-shadow: 0 0 8px rgba(46,160,67,0.9); }
+    .server-bad { background: #f85149; box-shadow: 0 0 8px rgba(248,81,73,0.9); }
 
     .right-container {
-      position: fixed;
-      right: 10px;
-      top: 10px;
-      display: flex;
-      gap: 10px;
+      position: fixed; right: 10px; top: 10px; display: flex; gap: 10px;
       max-height: calc(100vh - 20px);
     }
     .hud-right {
-      width: 280px;
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 8px;
-      font-size: 12px;
-      max-height: 100%;
-      overflow-y: auto;
-      pointer-events: auto;
+      width: 280px; padding: 8px 12px; background: rgba(0, 0, 0, 0.6);
+      border-radius: 8px; font-size: 12px; max-height: 100%;
+      overflow-y: auto; pointer-events: auto;
     }
     .hud-right-title {
-      font-weight: 600;
-      color: #79c0ff;
-      margin-bottom: 4px;
-      position: sticky;
-      top: 0;
-      background: rgba(0, 0, 0, 0.9);
-      padding-bottom: 3px;
-      z-index: 1;
+      font-weight: 600; color: #79c0ff; margin-bottom: 4px;
+      position: sticky; top: 0; background: rgba(0, 0, 0, 0.9);
+      padding-bottom: 3px; z-index: 1;
     }
     .leader-row {
-      margin-top: 3px;
-      border-bottom: 1px solid rgba(110,118,129,0.3);
-      padding: 3px 12px 3px 18px;
-      cursor: pointer;
-      position: relative;
+      margin-top: 3px; border-bottom: 1px solid rgba(110,118,129,0.3);
+      padding: 3px 12px 3px 18px; cursor: pointer; position: relative;
     }
-    .leader-row:last-child {
-      border-bottom: none;
-    }
-    .leader-row:hover {
-      background: rgba(56,139,253,0.15);
-    }
-    .leader-focus-btn {
-      position: absolute;
-      left: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 16px;
-      height: 16px;
-      border-radius: 4px;
-      border: 1px solid #f85149;
-      color: #f85149;
-      font-size: 12px;
-      line-height: 14px;
-      text-align: center;
-      background: rgba(248,81,73,0.1);
-      box-shadow: 0 0 4px rgba(248,81,73,0.7);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.12s ease-out, transform 0.12s ease-out;
-    }
-    .leader-row:hover .leader-focus-btn {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateY(-50%) scale(1.03);
-    }
-    .row-selected .leader-focus-btn {
-      opacity: 1;
-      border-color: #2ea043;
-      color: #2ea043;
-      box-shadow: 0 0 6px rgba(46,160,67,0.9);
-      background: rgba(46,160,67,0.12);
-    }
-    .row-selected {
-      border: 1px solid #2ea043;
-      background: rgba(46,160,67,0.25);
-    }
+    .leader-row:last-child { border-bottom: none; }
+    .leader-row:hover { background: rgba(56,139,253,0.15); }
+    .row-selected { border: 1px solid #2ea043; background: rgba(46,160,67,0.25); }
     .leader-main {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 4px;
-      white-space: nowrap;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 4px; white-space: nowrap;
     }
-    .leader-name {
-      font-weight: 500;
-    }
-    .leader-clan {
-      color: #8b949e;
-      margin-left: 6px;
-    }
-    .leader-info {
-      font-size: 11px;
-      color: #c9d1d9;
-      white-space: nowrap;
-    }
+    .leader-name { font-weight: 500; }
+    .leader-clan { color: #8b949e; margin-left: 6px; }
+    .leader-info { font-size: 11px; color: #c9d1d9; white-space: nowrap; }
 
-    .controls {
-      position: fixed;
-      left: 10px;
-      bottom: 10px;
-      display: flex;
-      gap: 8px;
-      pointer-events: auto;
-    }
-    .btn {
-      border: 1px solid #30363d;
-      background: rgba(13,17,23,0.9);
-      color: #e5e5e5;
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 11px;
-      cursor: pointer;
-    }
-    .btn:hover {
-      background: rgba(22,27,34,0.95);
-    }
-    .btn-active {
-      border-color: #2ea043;
-      box-shadow: 0 0 6px rgba(46,160,67,0.6);
-    }
-
-    /* Панель деталей выбранной бактерии */
     #selectedBacteriumDetail {
-      width: 280px;
-      padding: 10px 12px;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 8px;
-      font-size: 12px;
-      overflow-y: auto;
-      pointer-events: auto;
-      border: 1px solid rgba(46,160,67,0.5);
-      display: none;
+      width: 280px; padding: 10px 12px; background: rgba(0, 0, 0, 0.6);
+      border-radius: 8px; font-size: 12px; overflow-y: auto; pointer-events: auto;
+      border: 1px solid rgba(46,160,67,0.5); display: none;
     }
-    .detail-title {
-      font-weight: 600;
-      color: #2ea043;
-      margin-bottom: 8px;
-    }
+    .detail-title { font-weight: 600; color: #2ea043; margin-bottom: 4px; }
     .detail-row {
-      margin-bottom: 6px;
-      border-bottom: 1px solid rgba(110,118,129,0.25);
+      margin-bottom: 3px; border-bottom: 1px solid rgba(110,118,129,0.25);
       padding-bottom: 4px;
     }
     .detail-row .label {
-      color: #8b949e;
-      display: inline-block;
-      min-width: 110px;
-    }
-    .detail-title {
-      font-weight: 600;
-      color: #2ea043;
-      margin-bottom: 4px;
-    }
-    .detail-row {
-      margin-bottom: 3px;
-    }
-    .detail-row .label {
-      color: #8b949e;
-      display: inline-block;
-      min-width: 90px;
+      color: #8b949e; display: inline-block; min-width: 90px;
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
-  <!-- Левая панель: статус и общая инфа -->
   <div class="hud">
     <div class="row server-row">
       <div id="serverDot" class="server-dot"></div>
@@ -248,7 +91,6 @@
     <div class="row" id="hudRow3"></div>
   </div>
 
-  <!-- Правая панель: список бактерий + отдельная панель деталей сбоку -->
   <div class="right-container">
     <div id="selectedBacteriumDetail">
       <div class="detail-title">Детали выбранной бактерии</div>
@@ -259,6 +101,7 @@
       <div id="leadersList"></div>
     </div>
   </div>
+
   <script>
     const SERVER_URL = "https://cytophage.onrender.com";
 
@@ -271,7 +114,7 @@
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
-const detailPanel = document.getElementById("selectedBacteriumDetail");
+    const detailPanel = document.getElementById("selectedBacteriumDetail");
     const detailContent = document.getElementById("detailContent");
 
     let width = window.innerWidth;
@@ -287,12 +130,8 @@ const detailPanel = document.getElementById("selectedBacteriumDetail");
     });
 
     let world = { width: 8000, height: 8000 };
-    let worldWidth = world.width;
-    let worldHeight = world.height;
-
-    // Камера
-    let cameraX = worldWidth / 2;
-    let cameraY = worldHeight / 2;
+    let cameraX = world.width / 2;
+    let cameraY = world.height / 2;
     let zoom = 0.1;
 
     let isDragging = false;
@@ -300,28 +139,21 @@ const detailPanel = document.getElementById("selectedBacteriumDetail");
     let dragStartY = 0;
     let cameraStartX = 0;
     let cameraStartY = 0;
-let lastStats = null;
+
+    let lastStats = null;
     let lastServerOk = false;
-    
-    // UPTIME - просто храним последнее значение с сервера
     let serverUptimeSeconds = 0;
     let uptimeLastFetch = Date.now();
 
-    // "сырые" данные с сервера
     let bacteriaRaw = [];
     let foodRaw = [];
-
-    // сглаженные позиции (чтобы не дёргалось)
-    // id -> { x, y }
     const renderPositions = new Map();
 
     let selectedBacteriumId = null;
     let lastHudInteractionTime = 0;
 
-    // Функция форматирования времени работы
     function formatUptime(seconds) {
       if (!seconds || seconds < 0) return "—";
-      
       const days = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
@@ -332,11 +164,9 @@ let lastStats = null;
       if (hours > 0) parts.push(`${hours}ч`);
       if (minutes > 0) parts.push(`${minutes}м`);
       if (secs > 0 || parts.length === 0) parts.push(`${secs}с`);
-
       return parts.join(' ');
     }
 
-    // Плавное обновление uptime между запросами
     setInterval(() => {
       if (lastServerOk && serverUptimeSeconds > 0) {
         const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
@@ -344,7 +174,8 @@ let lastStats = null;
         serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
       }
     }, 1000);
-canvas.addEventListener("mousedown", (e) => {
+
+    canvas.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       isDragging = true;
       dragStartX = e.clientX;
@@ -418,7 +249,6 @@ canvas.addEventListener("mousedown", (e) => {
     }
 
     function getRenderBacteriaList() {
-      // очищаем позиции для умерших
       const currentIds = new Set(bacteriaRaw.map(b => b.id));
       for (const id of renderPositions.keys()) {
         if (!currentIds.has(id)) {
@@ -427,8 +257,8 @@ canvas.addEventListener("mousedown", (e) => {
       }
 
       const smoothed = [];
-      const alpha = 0.025; // ультра-сильное сглаживание
-      const maxStep = 6; // минимальный шаг смещения за кадр в координатах мира
+      const alpha = 0.025;
+      const maxStep = 6;
 
       for (const b of bacteriaRaw) {
         let rp = renderPositions.get(b.id);
@@ -447,11 +277,7 @@ canvas.addEventListener("mousedown", (e) => {
           rp.x += dx * alpha;
           rp.y += dy * alpha;
         }
-        smoothed.push({
-          ...b,
-          x: rp.x,
-          y: rp.y
-        });
+        smoothed.push({ ...b, x: rp.x, y: rp.y });
       }
       return smoothed;
     }
@@ -459,14 +285,12 @@ canvas.addEventListener("mousedown", (e) => {
     function draw() {
       const renderBacteria = getRenderBacteriaList();
 
-      // камера следует за выбранной бактерией — по сглаженным координатам
       if (selectedBacteriumId !== null) {
         const target = renderBacteria.find(b => b.id === selectedBacteriumId);
         if (target) {
-          const lerp = 0.03; // ещё более мягкое движение камеры
+          const lerp = 0.03;
           cameraX += (target.x - cameraX) * lerp;
           cameraY += (target.y - cameraY) * lerp;
-          // ограничиваем максимальное смещение камеры за кадр, чтобы не было рывков
           const maxCamStep = 20;
           const dcx = target.x - cameraX;
           const dcy = target.y - cameraY;
@@ -485,7 +309,6 @@ canvas.addEventListener("mousedown", (e) => {
       ctx.fillStyle = "#020409";
       ctx.fillRect(0, 0, width, height);
 
-      // границы мира
       ctx.save();
       ctx.lineWidth = 2;
       ctx.strokeStyle = "rgba(120, 255, 120, 0.6)";
@@ -496,7 +319,6 @@ canvas.addEventListener("mousedown", (e) => {
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
-      // еда
       ctx.save();
       for (const f of foodRaw) {
         const p = worldToScreen(f.x, f.y);
@@ -509,8 +331,6 @@ canvas.addEventListener("mousedown", (e) => {
       }
       ctx.restore();
 
-      // круг территории клана (цвет = цвет лидера)
-      // Важно: рисуем по тем же сглаженным координатам, что и бактерии, иначе будет "дёргаться".
       ctx.save();
       const clanSize = new Map();
       for (const bb of bacteriaRaw) {
@@ -518,34 +338,25 @@ canvas.addEventListener("mousedown", (e) => {
         clanSize.set(fid, (clanSize.get(fid) || 0) + 1);
       }
 
-      // Fallback-формула радиуса на клиенте (если сервер не прислал clanRadius)
-      const CLAN_RADIUS_BASE = 14;
-      const CLAN_RADIUS_PER_SQRT_MEMBER = 2;
-      const CLAN_RADIUS_MAX = 30;
-
       for (const leader of renderBacteria) {
         if (!leader.isLeader) continue;
         const fid = leader.familyId || 0;
         if (!fid) continue;
 
-        const size = clanSize.get(fid) || 1;
-        const radiusWorld = (leader.clanRadius ?? leader.familyRadius ?? leader.territoryRadius ?? Math.min(CLAN_RADIUS_MAX, CLAN_RADIUS_BASE + Math.sqrt(size) * CLAN_RADIUS_PER_SQRT_MEMBER));
-
+        const radiusWorld = leader.clanRadius || 120;
         const p = worldToScreen(leader.x, leader.y);
         const radius = radiusWorld * zoom;
         if (p.x < -radius || p.y < -radius || p.x > width + radius || p.y > height + radius) continue;
 
         const c = leader.familyColor || leader.color || "#58a6ff";
 
-        // лёгкая заливка
-        ctx.globalAlpha = 0.05;
+        ctx.globalAlpha = 0.08;
         ctx.fillStyle = c;
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // обводка
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.4;
         ctx.strokeStyle = c;
         ctx.lineWidth = Math.max(1, 1.5 * zoom);
         ctx.beginPath();
@@ -556,7 +367,6 @@ canvas.addEventListener("mousedown", (e) => {
       }
       ctx.restore();
 
-      // бактерии
       ctx.save();
       for (const b of renderBacteria) {
         const p = worldToScreen(b.x, b.y);
@@ -564,7 +374,6 @@ canvas.addEventListener("mousedown", (e) => {
 
         const radius = Math.max(2, b.size * zoom);
 
-        // тело (цвет клана)
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = b.familyColor || "#58a6ff";
@@ -573,7 +382,6 @@ canvas.addEventListener("mousedown", (e) => {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // кольцо лидера
         if (b.isLeader) {
           ctx.lineWidth = 2;
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
@@ -582,7 +390,6 @@ canvas.addEventListener("mousedown", (e) => {
           ctx.stroke();
         }
 
-        // выделение выбранной бактерии (зелёная рамка)
         if (selectedBacteriumId === b.id) {
           ctx.lineWidth = 2;
           ctx.strokeStyle = "rgba(46, 160, 67, 0.95)";
@@ -591,7 +398,6 @@ canvas.addEventListener("mousedown", (e) => {
           ctx.stroke();
         }
 
-        // полоска голода
         const barWidth = radius * 2.6;
         const barHeight = 3;
         const barX = p.x - barWidth / 2;
@@ -604,19 +410,10 @@ canvas.addEventListener("mousedown", (e) => {
         ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
         ctx.fillRect(barX, barY, barWidth * hungerRatio, barHeight);
 
-        // имя над бактерией
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
         ctx.font = "10px system-ui";
-        if (b.isLeader) {
-        if (b.isLeader) {
-          if (b.isLeader) {
-        if (b.isLeader) {
-          if (b.isLeader) ctx.fillText(b.name, p.x, barY - 3);
-        }
-        }
-        }
-        }
+        if (b.isLeader) ctx.fillText(b.name, p.x, barY - 3);
       }
       ctx.restore();
 
@@ -711,10 +508,10 @@ canvas.addEventListener("mousedown", (e) => {
       }
       const ageYears = b.ageYears ?? 0;
       const ageLabel = formatAgeLabel(ageYears);
-      const sizePoints = (b.sizePoints !== undefined ? b.sizePoints : (b.size || 0));
-      const maxSizePoints = (b.maxSizePoints !== undefined ? b.maxSizePoints : "?");
+      const sizePoints = b.sizePoints ?? b.size ?? 0;
+      const maxSizePoints = b.maxSizePoints ?? 1000;
       const hunger = Math.round(b.hunger ?? 0);
-      const maxHunger = b.maxHunger ?? "?";
+      const maxHunger = b.maxHunger ?? 100;
       const children = b.childrenCount ?? 0;
 
       const isLeader = !!b.isLeader;
@@ -724,11 +521,13 @@ canvas.addEventListener("mousedown", (e) => {
 
       const clanName = b.familyName || "Нет";
       const clanColor = b.familyColor || "#58a6ff";
+      const clanRadius = b.isLeader && b.clanRadius ? Math.round(b.clanRadius) : "—";
 
       detailContent.innerHTML = `
         <div class="detail-row"><span class="label">Имя:</span> <span style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
         <div class="detail-row"><span class="label">Статус:</span> ${statusHtml}</div>
         <div class="detail-row"><span class="label">Клан:</span> <span style="color:${clanColor};">${clanName}${b.familyId ? ` (ID: ${b.familyId})` : ""}</span></div>
+        <div class="detail-row"><span class="label">Радиус клана:</span> ${clanRadius}</div>
         <div class="detail-row"><span class="label">Возраст:</span> ${ageLabel} (${ageYears.toFixed(2)} лет)</div>
         <div class="detail-row"><span class="label">Поколение:</span> ${Math.floor(b.generation || 0)}</div>
         <div class="detail-row"><span class="label">Размер:</span> ${Math.round(sizePoints)}/${maxSizePoints}</div>
@@ -763,8 +562,6 @@ canvas.addEventListener("mousedown", (e) => {
         const res = await fetch(SERVER_URL + "/state", { cache: "no-cache" });
         const data = await res.json();
         world = data.world || world;
-        worldWidth = world.width;
-        worldHeight = world.height;
 
         bacteriaRaw = data.bacteria || [];
         foodRaw = data.food || [];
@@ -776,7 +573,6 @@ canvas.addEventListener("mousedown", (e) => {
           serverDot.classList.add("server-ok");
         }
         
-        // Обновляем текст с временем работы
         if (serverUptimeSeconds > 0) {
           const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
           const uptime = formatUptime(serverUptimeSeconds + elapsed);
@@ -791,7 +587,6 @@ canvas.addEventListener("mousedown", (e) => {
           updateRightHud();
         }
 
-        // Обновляем панель деталей, если кто-то выбран
         if (selectedBacteriumId !== null) {
           const b = bacteriaRaw.find(b => b.id === selectedBacteriumId);
           if (b) {
@@ -812,7 +607,6 @@ canvas.addEventListener("mousedown", (e) => {
       }
     }
 
-    // Получаем uptime с сервера
     async function fetchUptime() {
       try {
         const res = await fetch(SERVER_URL + "/ping", { cache: "no-cache" });
@@ -830,13 +624,9 @@ canvas.addEventListener("mousedown", (e) => {
       }
     }
 
-    // Обновляем uptime каждые 10 секунд
     setInterval(fetchUptime, 10000);
+    setInterval(fetchState, 120);
 
-    // более частое обновление состояния + сильное сглаживание
-    setInterval(fetchState, 120); // чаще обновляем состояние
-
-    // стартуем
     fetchState();
     fetchUptime();
     requestAnimationFrame(draw);
