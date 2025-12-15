@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -384,7 +383,6 @@
         ctx.shadowBlur = 0;
 
         if (b.isEmperor) {
-          // Двойная золотая обводка для императоров
           ctx.lineWidth = 3;
           ctx.strokeStyle = "rgba(255, 215, 0, 0.95)";
           ctx.beginPath();
@@ -412,7 +410,6 @@
           ctx.stroke();
         }
         
-        // Красное свечение для агрессивных
         if (b.isAggressive) {
           ctx.shadowBlur = radius * 3;
           ctx.shadowColor = "rgba(255, 0, 0, 0.9)";
@@ -432,7 +429,6 @@
           ctx.stroke();
         }
 
-        // HP bar (красный)
         const barWidth = radius * 2.6;
         const barHeight = 3;
         const barX = p.x - barWidth / 2;
@@ -445,7 +441,6 @@
         ctx.fillStyle = hpRatio > 0.5 ? "rgba(255, 99, 71, 0.9)" : "rgba(200, 40, 40, 0.95)";
         ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
 
-        // Hunger bar (зеленый)
         const barY2 = barY + 5;
         ctx.fillStyle = "rgba(80, 80, 80, 0.6)";
         ctx.fillRect(barX, barY2, barWidth, barHeight);
@@ -598,7 +593,6 @@
       const clanColor = b.familyColor || "#58a6ff";
       const clanRadius = b.isLeader && b.clanRadius ? Math.round(b.clanRadius) : "—";
 
-      // Новые параметры
       const hp = Math.round(b.hp ?? 100);
       const maxHp = Math.round(b.maxHp ?? 100);
       const strength = Math.round(b.strength ?? 10);
@@ -607,11 +601,9 @@
       const totalKills = b.totalKills ?? 0;
       const totalFood = b.totalFood ?? 0;
       
-      // Навыки
       const skills = b.learnedSkills || { hunting: 1, combat: 1, survival: 1 };
       const skillsHtml = `Охота: ${skills.hunting}/10, Бой: ${skills.combat}/10, Выживание: ${skills.survival}/10`;
       
-      // Урон
       const damageEstimate = `${1 + Math.floor(strength / 20)}-${5 + Math.floor(strength / 20)}`;
       
       let inventoryHtml = "";
