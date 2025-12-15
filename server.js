@@ -6,7 +6,7 @@ const https = require("https");
 
 const app = express();
 app.use(cors());
-
+ 
 // ---- FILES ----
 const STATE_FILE = path.join(__dirname, "world_state.json");
 const EVENTS_FILE = path.join(__dirname, "events.log");
