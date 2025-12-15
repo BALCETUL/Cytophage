@@ -27,6 +27,34 @@ const BIRTH_COOLDOWN_YEARS = 1;
 const MIN_LIFESPAN_YEARS = 60;
 const MAX_LIFESPAN_YEARS = 100;
 
+// ---- CLANS (LIMIT + FIXED COLORS) ----
+// Максимум кланов: 15. Цвета строго фиксированные (как вы дали).
+const MAX_CLANS = 15;
+const CLAN_COLORS = [
+  "#CD5C5C", "#E9967A", "#DC143C", "#FF0000", "#FFC0CB",
+  "#FFA07A", "#FFFF00", "#EE82EE", "#483D8B", "#0000CD",
+  "#5F9EA0", "#00FF00", "#20B2AA", "#696969", "#FFFFF0"
+];
+
+// ---- COMBAT (HP + DAMAGE) ----
+const COMBAT_ATTACK_RANGE = 18;               // дистанция удара
+const COMBAT_COOLDOWN_TICKS = 10;             // задержка между атаками
+const COMBAT_STRIKES_PER_ATTACK = 5;          // "5 случайных ударов" за атаку
+const COMBAT_MIN_DAMAGE = 1;                  // нижняя граница удара
+const COMBAT_MAX_DAMAGE = 35;                 // верхняя граница удара (с усилениями)
+
+// ---- INVENTORY (FOOD STORAGE) ----
+const FOOD_PARTICLE_MASS_KG = 1;              // 1 частица еды = 1 кг
+const CLAN_INVENTORY_BASE_KG = 50;            // стартовая емкость
+const CLAN_INVENTORY_MAX_KG = 5000;           // максимум 5 тонн
+const CLAN_INVENTORY_PER_MEMBER_KG = 10;      // бонус за каждого члена
+const CLAN_INVENTORY_PER_LEADER_YEAR_KG = 5;  // бонус за возраст лидера
+
+// ---- AGGRESSION (WAR CONTROL) ----
+const AGGRESSION_MIN_COOLDOWN_YEARS = 4;      // чтобы войны не шли бесконечно
+const AGGRESSION_DURATION_YEARS = 0.5;        // длительность "агрессивного" состояния
+const PAIR_BATTLE_COOLDOWN_YEARS = 1.0;       // откат боев между одной парой кланов
+
 // Голод
 const MAX_HUNGER = 100;
 const BASE_HUNGER_DRAIN = 0.01;
@@ -106,6 +134,9 @@ const COLONY_NAMES = [
   "Искры","Пламя","Луна","Солнце","Тени","Волки","Ястребы","Космос","Гроза","Мираж"
 ];
 
+// Имена кланов ограничиваем до 15 (как лимит кланов)
+const CLAN_NAMES = COLONY_NAMES.slice(0, MAX_CLANS);
+
 function getColonyNameById(id) {
   if (id >= 1 && id <= COLONY_NAMES.length) {
     return COLONY_NAMES[id - 1];
@@ -114,13 +145,52 @@ function getColonyNameById(id) {
 }
 
 // ---- FAMILY SYSTEM ----
-let nextFamilyId = 1;
+// nextFamilyId оставляем для совместимости со старым состоянием, но теперь
+// ID кланов строго 1..15 и переиспользуются, если клан полностью вымер.
+let nextFamilyId = MAX_CLANS + 1;
+
+// Состояние кланов: инвентарь, емкость, агрессия, и т.д.
+let clanMeta = new Map();            // familyId -> { inventoryKg, capacityKg, aggressiveUntilTick, lastAggressiveTick, isImperial }
+let pairWarState = new Map();        // "a-b" -> { activeUntilTick, cooldownUntilTick }
+
+function getActiveClanIds() {
+  const ids = new Set();
+  for (const b of bacteriaArray) {
+    if (b.familyId) ids.add(b.familyId);
+  }
+  return ids;
+}
+
+function isClanLimitReached() {
+  return getActiveClanIds().size >= MAX_CLANS;
+}
+
+function ensureClanMeta(familyId) {
+  if (!familyId) return null;
+  const existing = clanMeta.get(familyId);
+  if (existing) return existing;
+  const meta = {
+    inventoryKg: 0,
+    capacityKg: CLAN_INVENTORY_BASE_KG,
+    aggressiveUntilTick: 0,
+    lastAggressiveTick: -Infinity,
+    isImperial: false
+  };
+  clanMeta.set(familyId, meta);
+  return meta;
+}
 
 function createFamily() {
-  const id = nextFamilyId++;
-  const hue = randInt(0, 359);
-  const color = `hsl(${hue}, 80%, 60%)`;
-  const name = getColonyNameById(id);
+  const used = getActiveClanIds();
+  let id = null;
+  for (let i = 1; i <= MAX_CLANS; i++) {
+    if (!used.has(i)) { id = i; break; }
+  }
+  if (!id) return null;
+
+  const color = CLAN_COLORS[id - 1] || "#58a6ff";
+  const name = CLAN_NAMES[id - 1] || getColonyNameById(id);
+  ensureClanMeta(id);
   return { familyId: id, familyColor: color, familyName: name };
 }
 
@@ -158,6 +228,53 @@ function computeClanRadius(memberCount, leaderSizePoints = 20) {
   return Math.min(CLAN_RADIUS_MAX, totalRadius);
 }
 
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+// ---- AGE->POWER CURVE ----
+// До 40 лет сила/HP растут, после 40 — быстрое старение и ослабление.
+function agePowerFactor(ageYears) {
+  const a = Math.max(0, ageYears || 0);
+  // дети/юные
+  if (a < ADULT_AGE_YEARS) {
+    return 0.35 + 0.65 * (a / ADULT_AGE_YEARS); // 0.35..1.0
+  }
+  // пик силы к 40
+  if (a <= 40) {
+    return 1.0 + 0.35 * ((a - ADULT_AGE_YEARS) / (40 - ADULT_AGE_YEARS)); // 1.0..1.35
+  }
+  // после 40 — экспоненциальное ослабление
+  const decay = Math.exp(-(a - 40) / 16);
+  return Math.max(0.15, 1.35 * decay);
+}
+
+function computeClanInventoryCapacityKg(memberCount, leaderAgeYears, isImperial) {
+  const members = Math.max(1, memberCount || 1);
+  const age = Math.max(0, leaderAgeYears || 0);
+  const base = CLAN_INVENTORY_BASE_KG;
+  const byMembers = (members - 1) * CLAN_INVENTORY_PER_MEMBER_KG;
+  const byAge = age * CLAN_INVENTORY_PER_LEADER_YEAR_KG;
+  const imperialBonus = isImperial ? 250 : 0;
+  return Math.min(CLAN_INVENTORY_MAX_KG, Math.round(base + byMembers + byAge + imperialBonus));
+}
+
+function computeCombatStats(b, clanIsImperial) {
+  const age = b.ageYears || 0;
+  const pow = agePowerFactor(age);
+  const sizeFactor = 0.6 + 0.4 * ((b.sizePoints || 0) / (b.maxSizePoints || MAX_SIZE_POINTS));
+  const imperial = clanIsImperial ? 1.15 : 1.0;
+
+  // HP
+  const maxHp = Math.round((60 + 110 * pow) * sizeFactor * imperial);
+
+  // Урон: диапазон + 5 ударов
+  const minD = clamp(Math.round((COMBAT_MIN_DAMAGE + 3 * pow) * imperial), 1, COMBAT_MAX_DAMAGE);
+  const maxD = clamp(Math.round((6 + 14 * pow) * sizeFactor * imperial), minD, COMBAT_MAX_DAMAGE);
+
+  return { maxHp, minD, maxD };
+}
+
 function rebuildFamilyCircles() {
   const tmp = new Map();
   
@@ -169,7 +286,8 @@ function rebuildFamilyCircles() {
       leaderId: null, 
       leaderX: 0, 
       leaderY: 0,
-      leaderSizePoints: 20
+      leaderSizePoints: 20,
+      leaderAgeYears: 0
     };
     rec.memberCount += 1;
     
@@ -178,6 +296,7 @@ function rebuildFamilyCircles() {
       rec.leaderX = b.x;
       rec.leaderY = b.y;
       rec.leaderSizePoints = b.sizePoints || 20;
+      rec.leaderAgeYears = b.ageYears || 0;
     }
     tmp.set(famId, rec);
   }
@@ -185,7 +304,31 @@ function rebuildFamilyCircles() {
   for (const [famId, rec] of tmp.entries()) {
     if (rec.leaderId == null) continue;
     rec.radius = computeClanRadius(rec.memberCount, rec.leaderSizePoints);
+    rec.isImperial = (rec.radius >= CLAN_RADIUS_MAX);
+
+    // meta (инвентарь, емкость, агрессия)
+    const meta = ensureClanMeta(famId);
+    if (meta) {
+      meta.isImperial = !!rec.isImperial;
+      meta.capacityKg = computeClanInventoryCapacityKg(rec.memberCount, rec.leaderAgeYears, rec.isImperial);
+      rec.inventoryKg = meta.inventoryKg;
+      rec.capacityKg = meta.capacityKg;
+      rec.isAggressive = stats.tickCount < (meta.aggressiveUntilTick || 0);
+    }
     tmp.set(famId, rec);
+  }
+
+  // Удаляем мету кланов, которые полностью вымерли
+  const active = new Set([...tmp.keys()].filter(id => id && id > 0));
+  for (const id of [...clanMeta.keys()]) {
+    if (!active.has(id)) clanMeta.delete(id);
+  }
+  // чистим войны по вымершим кланам
+  for (const key of [...pairWarState.keys()]) {
+    const [aStr, bStr] = key.split("-");
+    const a = parseInt(aStr, 10);
+    const b = parseInt(bStr, 10);
+    if (!active.has(a) || !active.has(b)) pairWarState.delete(key);
   }
 
   familyCircles = tmp;
@@ -218,7 +361,9 @@ class Cytophage {
       lastBirthYear = 0,
       childrenCount = 0,
       sizePoints = 20,
-      hasBranched = false
+      hasBranched = false,
+      hp = null,
+      lastAttackTick = 0
     } = options;
 
     this.id = nextBacteriaId++;
@@ -235,15 +380,25 @@ class Cytophage {
     this.lastBirthYear = lastBirthYear;
     this.childrenCount = childrenCount;
 
-    if (familyId && familyColor && familyName) {
-      this.familyId = familyId;
-      this.familyColor = familyColor;
-      this.familyName = familyName;
+    if (familyId) {
+      // цвет/имя фиксированные по ID
+      this.familyId = clamp(familyId, 1, MAX_CLANS);
+      this.familyColor = CLAN_COLORS[this.familyId - 1] || "#58a6ff";
+      this.familyName = CLAN_NAMES[this.familyId - 1] || getColonyNameById(this.familyId);
+      ensureClanMeta(this.familyId);
     } else {
       const fam = createFamily();
-      this.familyId = fam.familyId;
-      this.familyColor = fam.familyColor;
-      this.familyName = fam.familyName;
+      if (fam) {
+        this.familyId = fam.familyId;
+        this.familyColor = fam.familyColor;
+        this.familyName = fam.familyName;
+      } else {
+        // если кланы заполнены, привязываем к первому клану
+        this.familyId = 1;
+        this.familyColor = CLAN_COLORS[0] || "#58a6ff";
+        this.familyName = CLAN_NAMES[0] || getColonyNameById(1);
+      }
+      ensureClanMeta(this.familyId);
     }
 
     this.generation = generation;
@@ -255,11 +410,19 @@ class Cytophage {
     this.size = 3;
     this.visionRadius = 500;
     this.isLeader = false;
-    this.hasBranched = false;
+    this.hasBranched = !!hasBranched;
     this.isSuccessor = false;
     this.isOrphaned = false;
     this.childrenAlive = 0;
     this.childrenDead = 0;
+
+    // ---- COMBAT STATS ----
+    const cs = computeCombatStats(this, false);
+    this.maxHp = cs.maxHp;
+    this.hp = hp == null ? this.maxHp : clamp(Math.round(hp), 1, this.maxHp);
+    this.minDamage = cs.minD;
+    this.maxDamage = cs.maxD;
+    this.lastAttackTick = lastAttackTick || 0;
 
     stats.totalBorn += 1;
     
@@ -296,6 +459,8 @@ function saveState() {
     nextBacteriaId,
     nextFoodId,
     nextFamilyId,
+    clanMeta: Array.from(clanMeta.entries()),
+    pairWarState: Array.from(pairWarState.entries()),
     bacteria: bacteriaArray,
     food: foodArray,
     stats: { ...stats, lastSavedAt: new Date().toISOString() }
@@ -319,10 +484,23 @@ function loadState() {
     const raw = fs.readFileSync(STATE_FILE, "utf-8");
     const data = JSON.parse(raw);
 
+    // загрузка меты (если была) + безопасные дефолты
+    clanMeta = new Map(Array.isArray(data.clanMeta) ? data.clanMeta : []);
+    pairWarState = new Map(Array.isArray(data.pairWarState) ? data.pairWarState : []);
+
+    // жесткий лимит кланов: если в сохранении их больше 15 — стартуем новый мир
+    const uniqueClans = new Set((data.bacteria || []).map(b => b.familyId).filter(Boolean));
+    if (uniqueClans.size > MAX_CLANS) {
+      console.warn(`⚠️ Saved state has ${uniqueClans.size} clans (> ${MAX_CLANS}). Resetting world to comply with limit.`);
+      initWorld();
+      saveState();
+      return;
+    }
+
     world = data.world || world;
     nextBacteriaId = data.nextBacteriaId || 1;
     nextFoodId = data.nextFoodId || 1;
-    nextFamilyId = data.nextFamilyId || 1;
+    nextFamilyId = MAX_CLANS + 1;
     stats = { ...stats, ...data.stats };
 
     bacteriaArray = (data.bacteria || []).map(b => {
@@ -330,15 +508,18 @@ function loadState() {
         generation: b.generation ?? 0,
         parentId: b.parentId ?? null,
         familyId: b.familyId ?? null,
-        familyColor: b.familyColor ?? null,
-        familyName: b.familyName ?? null,
+        // цвет/имя клана теперь фиксированные — перекрываем при загрузке
+        familyColor: null,
+        familyName: null,
         ageTicks: b.ageTicks ?? 0,
         hunger: Math.max(0, Math.min(MAX_HUNGER, b.hunger ?? MAX_HUNGER * 0.5)),
         lifespanYears: b.lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS),
         lastBirthYear: b.lastBirthYear ?? 0,
         childrenCount: b.childrenCount ?? 0,
         sizePoints: b.sizePoints ?? 20,
-        hasBranched: b.hasBranched ?? false
+        hasBranched: b.hasBranched ?? false,
+        hp: b.hp ?? null,
+        lastAttackTick: b.lastAttackTick ?? 0
       };
       const c = new Cytophage(b.x ?? 0, b.y ?? 0, opts);
       c.id = b.id;
@@ -352,8 +533,14 @@ function loadState() {
       c.isOrphaned = b.isOrphaned ?? false;
       c.childrenAlive = b.childrenAlive ?? 0;
       c.childrenDead = b.childrenDead ?? 0;
-      if (!c.familyName && c.familyId) {
-        c.familyName = getColonyNameById(c.familyId);
+      // фиксируем цвета/имена кланов (и мету)
+      if (c.familyId) {
+        if (c.familyId < 1 || c.familyId > MAX_CLANS) {
+          c.familyId = 1;
+        }
+        c.familyColor = CLAN_COLORS[c.familyId - 1] || "#58a6ff";
+        c.familyName = CLAN_NAMES[c.familyId - 1] || getColonyNameById(c.familyId);
+        ensureClanMeta(c.familyId);
       }
       return c;
     });
@@ -369,8 +556,7 @@ function loadState() {
     nextBacteriaId = Math.max(nextBacteriaId, maxBId + 1);
     nextFoodId = Math.max(nextFoodId, maxFId + 1);
 
-    const maxFamId = bacteriaArray.reduce((m, b) => Math.max(m, b.familyId || 0), 0);
-    nextFamilyId = Math.max(nextFamilyId, maxFamId + 1);
+    nextFamilyId = MAX_CLANS + 1;
 
     rebuildChildrenMap();
 
@@ -497,7 +683,11 @@ function maybeBranchAdult(b) {
   if (!isMaxSize(b)) return;
   if (b.hasBranched) return;
 
+  // Если кланы заполнены (15/15), никто не может выйти из круга через создание нового клана.
+  if (isClanLimitReached()) return;
+
   const fam = createFamily();
+  if (!fam) return;
   b.familyId = fam.familyId;
   b.familyColor = fam.familyColor;
   b.familyName = fam.familyName;
