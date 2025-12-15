@@ -521,6 +521,14 @@ function loadState() {
     nextFamilyId = data.nextFamilyId || 1;
     stats = { ...stats, ...data.stats };
 
+    // ИСПРАВЛЕНИЕ: Если bacteria пустой - инициализируем новый мир
+    if (!data.bacteria || data.bacteria.length === 0) {
+      console.log("State file exists but bacteria array is empty, init new world");
+      initWorld();
+      saveState();
+      return;
+    }
+
     bacteriaArray = (data.bacteria || []).map(b => {
       const opts = {
         generation: b.generation ?? 0,
@@ -1257,15 +1265,24 @@ function handleEating() {
         b.totalFood++;
         b.experience += EXPERIENCE_PER_FOOD;
         
-        // Лишняя еда идет в инвентарь лидера
-        if (b.isLeader) {
-          if (b.hunger >= b.maxHunger && b.sizePoints >= b.maxSizePoints) {
-            const foodWeight = 0.5; // кг за единицу еды
-            if (b.inventory < b.maxInventory) {
-              b.inventory += foodWeight;
-              if (b.inventory > b.maxInventory) b.inventory = b.maxInventory;
+        // НОВАЯ ЛОГИКА: Только соклановцы приносят еду в инвентарь лидера
+        if (!b.isLeader) {
+          // Найти лидера клана
+          const leader = bacteriaArray.find(l => l.isLeader && l.familyId === b.familyId);
+          if (leader) {
+            // Если НЕ лидер наелся и вырос - отдаёт лишнее лидеру
+            if (b.hunger >= b.maxHunger && b.sizePoints >= b.maxSizePoints) {
+              const foodWeight = 0.5; // кг за единицу еды
+              if (leader.inventory < leader.maxInventory) {
+                leader.inventory += foodWeight;
+                if (leader.inventory > leader.maxInventory) leader.inventory = leader.maxInventory;
+              }
             }
           }
+        }
+        
+        // Лидер кормит семью из своих запасов
+        if (b.isLeader) {
           feedFamilyFromLeader(b);
         }
       }
@@ -1274,6 +1291,44 @@ function handleEating() {
 
   if (eatenFoodIds.size > 0) {
     foodArray = foodArray.filter(f => !eatenFoodIds.has(f.id));
+  }
+}
+
+// ---- ЛИДЕР ЕСТ ИЗ ИНВЕНТАРЯ ----
+function leaderEatFromInventory() {
+  for (const b of bacteriaArray) {
+    if (!b.isLeader) continue;
+    
+    // Лидер ест из инвентаря только когда голод < 20
+    if (b.hunger < 20 && b.inventory > 0) {
+      // Умное потребление: берёт ровно столько сколько нужно до 50 голода
+      const neededHunger = 50 - b.hunger;
+      const foodToEat = Math.min(neededHunger / FOOD_HUNGER_GAIN, b.inventory / 0.5);
+      
+      // Конвертируем еду в голод
+      const hungerGained = foodToEat * FOOD_HUNGER_GAIN;
+      b.hunger += hungerGained;
+      if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
+      
+      // Уменьшаем инвентарь
+      const inventoryUsed = foodToEat * 0.5;
+      b.inventory -= inventoryUsed;
+      if (b.inventory < 0) b.inventory = 0;
+      
+      // Логирование
+      console.log(`🍖 ${b.name} съел ${inventoryUsed.toFixed(1)} кг из запасов. Голод: ${b.hunger.toFixed(1)}, Осталось: ${b.inventory.toFixed(1)} кг`);
+      
+      logEvent({
+        type: "inventory_eat",
+        leaderId: b.id,
+        leaderName: b.name,
+        familyName: b.familyName,
+        inventoryUsed: inventoryUsed.toFixed(2),
+        hungerAfter: b.hunger.toFixed(1),
+        inventoryLeft: b.inventory.toFixed(1),
+        time: new Date().toISOString()
+      });
+    }
   }
 }
 
@@ -1292,9 +1347,10 @@ function tick() {
     markOrphans();
     updateBacteria();
     rebuildFamilyCircles();
-    handleCombat(); // НОВОЕ
+    handleCombat();
     enforceClanWalls();
     handleEating();
+    leaderEatFromInventory(); // НОВОЕ: Лидер ест из инвентаря
     maintainFood();
     updateChildrenStats();
 
@@ -1384,7 +1440,7 @@ app.listen(PORT, () => {
   console.log(`🌍 Server URL: ${SERVER_URL}`);
   console.log(`⚔️ Combat system: ENABLED`);
   console.log(`👑 Max clans: ${MAX_CLANS}`);
-  console.log(`📦 Inventory system: ENABLED`);
+  console.log(`📦 Inventory system: ENABLED (SMART LEADERS)`);
   console.log(`🧠 Intelligence system: ENABLED`);
   
   setTimeout(() => {
