@@ -31,7 +31,6 @@ const MAX_LIFESPAN_YEARS = 100;
 const MAX_HUNGER = 100;
 const BASE_HUNGER_DRAIN = 0.01;
 const HUNGER_DRAIN_PER_SIZE = 0.00005;
-const ORPHAN_HUNGER_DRAIN = 2.0;
 const FOOD_HUNGER_GAIN = 5;
 const BIRTH_HUNGER_COST = 35;
 const MIN_HUNGER_TO_REPRODUCE = 50;
@@ -283,6 +282,15 @@ function getFamilyCircle(familyId) {
   return familyCircles.get(familyId || 0) || null;
 }
 
+// ---- ПРОВЕРКА ПЕРЕСЕЧЕНИЯ КРУГОВ ----
+function areCirclesOverlapping(circle1, circle2) {
+  if (!circle1 || !circle2) return false;
+  const dx = circle1.leaderX - circle2.leaderX;
+  const dy = circle1.leaderY - circle2.leaderY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return dist < (circle1.radius + circle2.radius);
+}
+
 // ---- ENTITIES ----
 class FoodParticle {
   constructor(x, y) {
@@ -368,11 +376,10 @@ class Cytophage {
     this.isLeader = false;
     this.hasBranched = false;
     this.isSuccessor = false;
-    this.isOrphaned = false;
     this.childrenAlive = 0;
     this.childrenDead = 0;
+    this.isInCombat = false;
 
-    // ---- HP И БОЙ ----
     const ageYears = this.ageTicks / TICKS_PER_YEAR;
     this.maxHp = calculateMaxHP(ageYears);
     this.hp = hp !== null ? hp : this.maxHp;
@@ -380,7 +387,6 @@ class Cytophage {
     this.isAggressive = false;
     this.lastAggressionYear = -999;
 
-    // ---- ИНТЕЛЛЕКТ ----
     this.intelligence = BASE_INTELLIGENCE;
     this.experience = experience;
     this.totalKills = totalKills;
@@ -391,11 +397,8 @@ class Cytophage {
       survival: 1
     };
 
-    // ---- ИНВЕНТАРЬ (ТОЛЬКО ДЛЯ ЛИДЕРОВ) ----
     this.inventory = 0;
     this.maxInventory = BASE_INVENTORY;
-
-    // ---- ИМПЕРАТОР ----
     this.isEmperor = false;
 
     stats.totalBorn += 1;
@@ -504,7 +507,6 @@ function loadState() {
       c.visionRadius = b.visionRadius ?? c.visionRadius;
       c.isLeader = b.isLeader ?? false;
       c.isSuccessor = b.isSuccessor ?? false;
-      c.isOrphaned = b.isOrphaned ?? false;
       c.childrenAlive = b.childrenAlive ?? 0;
       c.childrenDead = b.childrenDead ?? 0;
       c.isAggressive = b.isAggressive ?? false;
@@ -513,6 +515,7 @@ function loadState() {
       c.maxInventory = b.maxInventory ?? BASE_INVENTORY;
       c.isEmperor = b.isEmperor ?? false;
       c.bornAt = b.bornAt ?? new Date().toISOString();
+      c.isInCombat = false;
       if (!c.familyName && c.familyId) {
         c.familyName = getColonyNameById(c.familyId);
       }
@@ -688,6 +691,7 @@ function maybeBranchAdult(b) {
   if (!isMaxSize(b)) return;
   if (b.hasBranched) return;
   
+  // Если лимит кланов достигнут - остаёмся в своём клане
   if (getActiveClanCount() >= MAX_CLANS) {
     return;
   }
@@ -695,7 +699,6 @@ function maybeBranchAdult(b) {
   const fam = createFamily();
   if (!fam) return;
   
-  // Выталкивание из старого круга
   const oldCircle = getFamilyCircle(b.familyId);
   if (oldCircle && oldCircle.leaderId) {
     const dx = b.x - oldCircle.leaderX;
@@ -705,7 +708,6 @@ function maybeBranchAdult(b) {
     b.x = oldCircle.leaderX + (dx / dist) * pushDist;
     b.y = oldCircle.leaderY + (dy / dist) * pushDist;
     
-    // Придать начальную скорость
     b.vx = (dx / dist) * 3;
     b.vy = (dy / dist) * 3;
   }
@@ -716,7 +718,6 @@ function maybeBranchAdult(b) {
   b.isLeader = true;
   b.hasBranched = true;
   b.isSuccessor = false;
-  b.isOrphaned = false;
   
   console.log(`👑 ${b.name} создал новый клан: ${b.familyName}`);
 }
@@ -751,30 +752,33 @@ function maybeSelectSuccessor(leader) {
   console.log(`⭐ ${leader.name} выбрал преемником ${successor.name}`);
 }
 
-// ---- ПРОВЕРКА СИРОТ ----
-function markOrphans() {
-  const clansWithLeaders = new Set();
-  for (const b of bacteriaArray) {
-    if (b.isLeader) {
-      clansWithLeaders.add(b.familyId);
-    }
-  }
-  
-  for (const b of bacteriaArray) {
-    if (b.isLeader) continue;
-    if (isMaxSize(b)) continue;
-    
-    const hasLeader = clansWithLeaders.has(b.familyId);
-    if (!hasLeader && !b.isOrphaned) {
-      b.isOrphaned = true;
-      console.log(`💀 ${b.name} стал сиротой`);
-    }
-  }
-}
-
 // ---- СИСТЕМА БОЕВ ----
 function handleCombat() {
   const activeClanCount = getActiveClanCount();
+  
+  // Сброс состояния боя
+  for (const b of bacteriaArray) {
+    b.isInCombat = false;
+  }
+  
+  // Определяем пересечения кругов
+  const circlesInCombat = new Set();
+  for (const circle1 of familyCircles.values()) {
+    for (const circle2 of familyCircles.values()) {
+      if (circle1.familyId === circle2.familyId) continue;
+      if (areCirclesOverlapping(circle1, circle2)) {
+        circlesInCombat.add(circle1.familyId);
+        circlesInCombat.add(circle2.familyId);
+      }
+    }
+  }
+  
+  // Помечаем всех членов кланов в бою
+  for (const b of bacteriaArray) {
+    if (circlesInCombat.has(b.familyId)) {
+      b.isInCombat = true;
+    }
+  }
   
   // Агрессия лидеров
   for (const leader of bacteriaArray) {
@@ -802,6 +806,7 @@ function handleCombat() {
   // Битвы при пересечении кругов
   for (const b of bacteriaArray) {
     if (b.hp <= 0) continue;
+    if (!b.isInCombat) continue;
     
     const myCircle = getFamilyCircle(b.familyId);
     if (!myCircle) continue;
@@ -814,16 +819,13 @@ function handleCombat() {
       const enemyCircle = getFamilyCircle(enemy.familyId);
       if (!enemyCircle) continue;
       
-      const distBetweenLeaders = Math.sqrt(distanceSq(myCircle.leaderX, myCircle.leaderY, enemyCircle.leaderX, enemyCircle.leaderY));
-      const circlesOverlap = distBetweenLeaders < (myCircle.radius + enemyCircle.radius);
-      
+      const circlesOverlap = areCirclesOverlapping(myCircle, enemyCircle);
       if (!circlesOverlap) continue;
       
       const myLeader = bacteriaArray.find(l => l.id === myCircle.leaderId);
       const enemyLeader = bacteriaArray.find(l => l.id === enemyCircle.leaderId);
       
       const isAggressiveSituation = (myLeader && myLeader.isAggressive) || (enemyLeader && enemyLeader.isAggressive);
-      
       if (!isAggressiveSituation) continue;
       
       const distToEnemy = Math.sqrt(distanceSq(b.x, b.y, enemy.x, enemy.y));
@@ -894,7 +896,6 @@ function enforceClanWalls() {
     maybeBranchAdult(b);
 
     if (b.isLeader) {
-      // Лидер НЕ может пересекать чужие круги
       for (const otherCircle of familyCircles.values()) {
         if (otherCircle.familyId === b.familyId) continue;
         if (!otherCircle.leaderId) continue;
@@ -905,13 +906,11 @@ function enforceClanWalls() {
         const r = otherCircle.radius || 40;
         
         if (dist < r) {
-          // Выталкиваем лидера из чужого круга
           const ux = dx / dist;
           const uy = dy / dist;
           b.x = otherCircle.leaderX + ux * r;
           b.y = otherCircle.leaderY + uy * r;
           
-          // Отражение скорости
           const outward = b.vx * ux + b.vy * uy;
           if (outward < 0) {
             b.vx -= outward * ux * 1.5;
@@ -978,11 +977,35 @@ function feedFamilyFromLeader(leader) {
   }
 }
 
-// ---- ПОИСК ЕДЫ / HEALTH FOOD ----
+// ---- ПОИСК ЕДЫ / HEALTH FOOD / ВРАГОВ ----
 function findBestTargetFor(b) {
+  // В бою - ищем врагов
+  if (b.isInCombat) {
+    const myCircle = getFamilyCircle(b.familyId);
+    if (myCircle) {
+      let closestEnemy = null;
+      let closestDist = Infinity;
+      
+      for (const enemy of bacteriaArray) {
+        if (enemy === b) continue;
+        if (enemy.familyId === b.familyId) continue;
+        if (enemy.hp <= 0) continue;
+        
+        const dist = Math.sqrt(distanceSq(b.x, b.y, enemy.x, enemy.y));
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestEnemy = enemy;
+        }
+      }
+      
+      if (closestEnemy) {
+        return { target: closestEnemy, type: 'enemy' };
+      }
+    }
+  }
+  
   const visionRadiusSq = b.visionRadius * b.visionRadius;
   
-  // Приоритет: если HP критично (<30%) - ищем health food
   const hpRatio = b.hp / b.maxHp;
   const needsHealthUrgently = hpRatio < 0.3;
   
@@ -990,14 +1013,12 @@ function findBestTargetFor(b) {
   let bestScore = Infinity;
   let targetType = null;
   
-  // Если HP критично - приоритет на health food
   if (needsHealthUrgently && b.isLeader) {
     for (const hf of healthFoodArray) {
       const distSq = distanceSq(b.x, b.y, hf.x, hf.y);
       if (distSq > visionRadiusSq) continue;
       const dist = Math.sqrt(distSq);
       
-      // Здоровье критично - максимальный приоритет
       const score = dist * 0.5;
       if (score < bestScore) {
         bestScore = score;
@@ -1007,7 +1028,6 @@ function findBestTargetFor(b) {
     }
   }
   
-  // Если не нашли health food или HP не критично - ищем обычную еду
   if (!bestTarget) {
     for (const food of foodArray) {
       const distSq = distanceSq(b.x, b.y, food.x, food.y);
@@ -1032,7 +1052,6 @@ function findBestTargetFor(b) {
     }
   }
   
-  // По пути к health food лидер собирает обычную еду
   if (bestTarget && targetType === 'health' && b.isLeader) {
     for (const food of foodArray) {
       const distToFood = Math.sqrt(distanceSq(b.x, b.y, food.x, food.y));
@@ -1109,10 +1128,6 @@ function updateBacteria() {
       if (b.isLeader) hungerDrain *= 1.5;
       if (ageYears > 40) hungerDrain *= 1 + ((ageYears - 40) / 100);
       
-      if (b.isOrphaned) {
-        hungerDrain += ORPHAN_HUNGER_DRAIN;
-      }
-      
       b.hunger -= hungerDrain;
       if (b.hunger < 0) b.hunger = 0;
 
@@ -1142,25 +1157,20 @@ function updateBacteria() {
 
       handleCollisions(b);
 
-      if (!b.isOrphaned) {
-        const targetInfo = findBestTargetFor(b);
-        if (targetInfo) {
-          const dx = targetInfo.target.x - b.x;
-          const dy = targetInfo.target.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const targetInfo = findBestTargetFor(b);
+      if (targetInfo) {
+        const dx = targetInfo.target.x - b.x;
+        const dy = targetInfo.target.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-          const desiredVx = (dx / dist) * b.maxSpeed;
-          const desiredVy = (dy / dist) * b.maxSpeed;
+        const desiredVx = (dx / dist) * b.maxSpeed;
+        const desiredVy = (dy / dist) * b.maxSpeed;
 
-          b.vx += (desiredVx - b.vx) * b.acceleration;
-          b.vy += (desiredVy - b.vy) * b.acceleration;
-        } else {
-          b.vx += (Math.random() - 0.5) * 0.08;
-          b.vy += (Math.random() - 0.5) * 0.08;
-        }
+        b.vx += (desiredVx - b.vx) * b.acceleration;
+        b.vy += (desiredVy - b.vy) * b.acceleration;
       } else {
-        b.vx += (Math.random() - 0.5) * 0.15;
-        b.vy += (Math.random() - 0.5) * 0.15;
+        b.vx += (Math.random() - 0.5) * 0.08;
+        b.vy += (Math.random() - 0.5) * 0.08;
       }
 
       b.vx *= b.friction;
@@ -1214,9 +1224,9 @@ function handleEating() {
   const eatenHealthFoodIds = new Set();
 
   for (const b of bacteriaArray) {
-    if (b.isOrphaned) continue;
+    // В бою не собираем еду
+    if (b.isInCombat) continue;
     
-    // Обычная еда
     for (const f of foodArray) {
       if (eatenFoodIds.has(f.id)) continue;
       const distSq = distanceSq(b.x, b.y, f.x, f.y);
@@ -1236,7 +1246,7 @@ function handleEating() {
           const leader = bacteriaArray.find(l => l.isLeader && l.familyId === b.familyId);
           if (leader) {
             if (b.hunger >= b.maxHunger && b.sizePoints >= b.maxSizePoints) {
-              const foodWeight = 1; // 1 к 1 - целое число
+              const foodWeight = 1;
               if (leader.inventory < leader.maxInventory) {
                 leader.inventory += foodWeight;
                 if (leader.inventory > leader.maxInventory) leader.inventory = leader.maxInventory;
@@ -1251,7 +1261,6 @@ function handleEating() {
       }
     }
     
-    // Health food - восстанавливает HP всему клану
     for (const hf of healthFoodArray) {
       if (eatenHealthFoodIds.has(hf.id)) continue;
       const distSq = distanceSq(b.x, b.y, hf.x, hf.y);
@@ -1259,7 +1268,6 @@ function handleEating() {
       if (distSq < eatRadius * eatRadius) {
         eatenHealthFoodIds.add(hf.id);
         
-        // Восстанавливает HP всем членам клана
         const rec = getFamilyCircle(b.familyId);
         if (rec) {
           for (const member of bacteriaArray) {
@@ -1317,7 +1325,6 @@ function tick() {
     }
 
     updateFamilyLeaders();
-    markOrphans();
     updateBacteria();
     rebuildFamilyCircles();
     handleCombat();
@@ -1383,9 +1390,9 @@ app.get("/state", (req, res) => {
       childrenDead: b.childrenDead,
       isLeader: b.isLeader,
       isSuccessor: b.isSuccessor,
-      isOrphaned: b.isOrphaned,
       isAggressive: b.isAggressive,
       isEmperor: b.isEmperor,
+      isInCombat: b.isInCombat,
       inventory: b.inventory,
       maxInventory: b.maxInventory,
       clanRadius: b.isLeader ? (getFamilyCircle(b.familyId)?.radius ?? null) : null
