@@ -162,7 +162,7 @@ let usedClanSlots = new Set();
 function getActiveClanCount() {
   const activeClans = new Set();
   for (const b of bacteriaArray) {
-    if (b.isLeader) {
+    if (b.isLeader && b.familyId) {
       activeClans.add(b.familyId);
     }
   }
@@ -345,6 +345,7 @@ class Cytophage {
     this.childrenCount = childrenCount;
     this.bornAt = new Date().toISOString();
 
+    // FIX: Убедимся что у каждой бактерии ВСЕГДА есть familyId
     if (familyId && familyColor && familyName) {
       this.familyId = familyId;
       this.familyColor = familyColor;
@@ -356,11 +357,17 @@ class Cytophage {
         this.familyColor = fam.familyColor;
         this.familyName = fam.familyName;
       } else {
+        // FIX: Если лимит достигнут, присоединяемся к случайному клану
         const randomBact = bacteriaArray[randInt(0, bacteriaArray.length - 1)];
-        if (randomBact) {
+        if (randomBact && randomBact.familyId) {
           this.familyId = randomBact.familyId;
           this.familyColor = randomBact.familyColor;
           this.familyName = randomBact.familyName;
+        } else {
+          // FIX: В крайнем случае создаем клан 0 (это не должно произойти)
+          this.familyId = 0;
+          this.familyColor = "#FFFFFF";
+          this.familyName = "Нейтральные";
         }
       }
     }
@@ -752,7 +759,7 @@ function maybeSelectSuccessor(leader) {
   console.log(`⭐ ${leader.name} выбрал преемником ${successor.name}`);
 }
 
-// ---- СИСТЕМА БОЕВ ----
+// ---- СИСТЕМА БОЕВ (ИСПРАВЛЕННАЯ) ----
 function handleCombat() {
   const activeClanCount = getActiveClanCount();
   
@@ -813,7 +820,11 @@ function handleCombat() {
     
     for (const enemy of bacteriaArray) {
       if (enemy === b) continue;
+      
+      // FIX: КРИТИЧЕСКАЯ ЗАЩИТА - проверяем familyId СТРОГО и РАНО
+      if (!enemy.familyId || !b.familyId) continue;
       if (enemy.familyId === b.familyId) continue;
+      
       if (enemy.hp <= 0) continue;
       
       const enemyCircle = getFamilyCircle(enemy.familyId);
@@ -842,7 +853,7 @@ function handleCombat() {
         b.totalKills++;
         b.experience += EXPERIENCE_PER_KILL;
         stats.totalKills++;
-        console.log(`⚔️ ${b.name} убил ${enemy.name}! Урон: ${damage}`);
+        console.log(`⚔️ ${b.name} (${b.familyName}) убил ${enemy.name} (${enemy.familyName})! Урон: ${damage}`);
       }
     }
   }
@@ -988,6 +999,7 @@ function findBestTargetFor(b) {
       
       for (const enemy of bacteriaArray) {
         if (enemy === b) continue;
+        // FIX: Проверка на членов своего клана
         if (enemy.familyId === b.familyId) continue;
         if (enemy.hp <= 0) continue;
         
@@ -1104,7 +1116,7 @@ function maybeReproduce(b, newChildren) {
 
     newChildren.push(child);
 
-    console.log(`✨ Birth: ${child.name} (Gen ${child.generation}) from ${b.name}`);
+    console.log(`✨ Birth: ${child.name} (Gen ${child.generation}) from ${b.name} - Клан: ${child.familyName}`);
   } catch (err) {
     console.error("❌ Error in maybeReproduce:", err);
   }
@@ -1134,18 +1146,21 @@ function updateBacteria() {
       if (b.hunger <= 0) {
         deadIds.add(b.id);
         stats.totalDied += 1;
+        console.log(`💀 ${b.name} умер от голода в клане ${b.familyName}`);
         continue;
       }
       
       if (b.hp <= 0) {
         deadIds.add(b.id);
         stats.totalDied += 1;
+        console.log(`💀 ${b.name} умер от ран в клане ${b.familyName}`);
         continue;
       }
 
       if (ageYears >= b.lifespanYears) {
         deadIds.add(b.id);
         stats.totalDied += 1;
+        console.log(`💀 ${b.name} умер от старости (${ageYears.toFixed(1)} лет) в клане ${b.familyName}`);
         continue;
       }
 
@@ -1307,8 +1322,6 @@ function leaderEatFromInventory() {
       
       b.inventory -= foodToEat;
       if (b.inventory < 0) b.inventory = 0;
-      
-      console.log(`🍖 ${b.name} съел ${foodToEat} еды из запасов. Голод: ${b.hunger.toFixed(1)}, Осталось: ${b.inventory}`);
     }
   }
 }
@@ -1319,6 +1332,7 @@ function tick() {
     stats.tickCount += 1;
 
     if (bacteriaArray.length === 0) {
+      console.log("⚠️ Все бактерии умерли! Перезапуск мира...");
       initWorld();
       saveState();
       return;
@@ -1421,9 +1435,9 @@ app.listen(PORT, () => {
   console.log(`✅ Cytophage world server running on port ${PORT}`);
   console.log(`🌍 Server URL: ${SERVER_URL}`);
   console.log(`🗺️ Map size: ${WORLD_WIDTH}x${WORLD_HEIGHT}`);
-  console.log(`⚔️ Combat system: ENABLED`);
+  console.log(`⚔️ Combat system: ENABLED (FIXED - same clan protection)`);
   console.log(`👑 Max clans: ${MAX_CLANS}`);
-  console.log(`📦 Inventory system: ENABLED (1:1 REAL COUNT)`);
+  console.log(`📦 Inventory system: ENABLED`);
   console.log(`❤️ Health food system: ENABLED`);
   console.log(`🧠 Intelligence system: ENABLED`);
   
