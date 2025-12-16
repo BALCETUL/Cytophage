@@ -6,21 +6,15 @@ const https = require("https");
 
 const app = express();
 app.use(cors());
- 
+
 // ---- FILES ----
 const STATE_FILE = path.join(__dirname, "world_state.json");
-const EVENTS_FILE = path.join(__dirname, "events.log");
-const BACTERIA_MEMORY_DIR = path.join(__dirname, "bacteria_memory");
-
-// Создать папку для памяти бактерий
-if (!fs.existsSync(BACTERIA_MEMORY_DIR)) {
-  fs.mkdirSync(BACTERIA_MEMORY_DIR);
-}
 
 // ---- WORLD SETTINGS ----
-const WORLD_WIDTH = 8000;
-const WORLD_HEIGHT = 8000;
-const TARGET_FOOD_COUNT = 8000;
+const WORLD_WIDTH = 15000;
+const WORLD_HEIGHT = 15000;
+const TARGET_FOOD_COUNT = 15000;
+const TARGET_HEALTH_FOOD_COUNT = 500;
 const TICK_INTERVAL = 80;
 const MS_PER_TICK = TICK_INTERVAL;
 
@@ -47,7 +41,7 @@ const MAX_SIZE_POINTS = 1000;
 const SIZE_GAIN_PER_FOOD = 1;
 const CHILD_START_SIZE = 20;
 
-// ---- НОВОЕ: 15 ФИКСИРОВАННЫХ ЦВЕТОВ КЛАНОВ ----
+// ---- 15 ФИКСИРОВАННЫХ ЦВЕТОВ КЛАНОВ ----
 const MAX_CLANS = 15;
 const CLAN_COLORS = [
   "#CD5C5C", "#E9967A", "#DC143C", "#FF0000", "#FFC0CB",
@@ -60,20 +54,20 @@ const CLAN_RADIUS_MIN = 40;
 const CLAN_RADIUS_MAX = 500;
 const CLAN_RADIUS_LEADER_GROWTH = 260;
 const CLAN_RADIUS_PER_SQRT_MEMBER = 12;
-const EMPEROR_RADIUS_THRESHOLD = 500; // Великий император
+const EMPEROR_RADIUS_THRESHOLD = 500;
 
 // Стена круга
 const CLAN_EDGE_SOFT_ZONE = 0.85;
 const CLAN_EDGE_PULL = 0.2;
-const CLAN_EDGE_HARD_WALL = 0.95; // Жесткая стена при 15 кланах
+const CLAN_EDGE_HARD_WALL = 0.95;
 
 // Преемник
 const SUCCESSION_AGE_THRESHOLD = 0.8;
 
-// ---- НОВОЕ: HP И БОЙ ----
+// ---- HP И БОЙ ----
 const BASE_HP = 100;
-const HP_PER_YEAR_GROWTH = 10; // До 40 лет
-const HP_PER_YEAR_DECLINE = 8;  // После 40 лет
+const HP_PER_YEAR_GROWTH = 10;
+const HP_PER_YEAR_DECLINE = 8;
 const PEAK_AGE = 40;
 const MAX_HP = 500;
 
@@ -84,17 +78,19 @@ const STRENGTH_DECLINE = 3;
 const MIN_DAMAGE = 1;
 const MAX_DAMAGE = 5;
 
-// Вероятность агрессии лидера (0.05% за тик = ~1 раз в 33 секунды)
 const AGGRESSION_CHANCE = 0.0005;
-const AGGRESSION_COOLDOWN_YEARS = 5; // Кулдаун агрессии
+const AGGRESSION_COOLDOWN_YEARS = 5;
 
-// ---- НОВОЕ: ИНВЕНТАРЬ ----
-const BASE_INVENTORY = 50; // кг
-const INVENTORY_PER_MEMBER = 2; // кг за члена клана
-const INVENTORY_PER_YEAR = 3; // кг за год возраста лидера
-const MAX_INVENTORY = 5000; // 5 тонн
+// ---- HEALTH FOOD ----
+const HEALTH_FOOD_HP_RESTORE = 50;
 
-// ---- НОВОЕ: ИНТЕЛЛЕКТ ----
+// ---- ИНВЕНТАРЬ (целые числа) ----
+const BASE_INVENTORY = 50;
+const INVENTORY_PER_MEMBER = 2;
+const INVENTORY_PER_YEAR = 3;
+const MAX_INVENTORY = 5000;
+
+// ---- ИНТЕЛЛЕКТ ----
 const BASE_INTELLIGENCE = 10;
 const EXPERIENCE_PER_TICK = 0.1;
 const EXPERIENCE_PER_FOOD = 1;
@@ -162,7 +158,7 @@ function getColonyNameById(id) {
 
 // ---- FAMILY SYSTEM ----
 let nextFamilyId = 1;
-let usedClanSlots = new Set(); // Отслеживаем занятые слоты
+let usedClanSlots = new Set();
 
 function getActiveClanCount() {
   const activeClans = new Set();
@@ -175,7 +171,6 @@ function getActiveClanCount() {
 }
 
 function createFamily() {
-  // Проверяем лимит кланов
   if (getActiveClanCount() >= MAX_CLANS) {
     console.log("⚠️ Достигнут лимит кланов (15). Новый клан не создан.");
     return null;
@@ -193,8 +188,10 @@ function createFamily() {
 let world = { width: WORLD_WIDTH, height: WORLD_HEIGHT };
 let nextBacteriaId = 1;
 let nextFoodId = 1;
+let nextHealthFoodId = 1;
 let bacteriaArray = [];
 let foodArray = [];
+let healthFoodArray = [];
 let familyCircles = new Map();
 
 let stats = {
@@ -286,53 +283,18 @@ function getFamilyCircle(familyId) {
   return familyCircles.get(familyId || 0) || null;
 }
 
-// ---- СОХРАНЕНИЕ ПАМЯТИ БАКТЕРИИ ----
-function saveBacteriumMemory(b) {
-  const memoryFile = path.join(BACTERIA_MEMORY_DIR, `bacteria_${b.id}.json`);
-  const memory = {
-    id: b.id,
-    name: b.name,
-    familyId: b.familyId,
-    familyName: b.familyName,
-    generation: b.generation,
-    bornAt: b.bornAt,
-    ageYears: b.ageYears,
-    hp: b.hp,
-    maxHp: b.maxHp,
-    strength: b.strength,
-    intelligence: b.intelligence,
-    experience: b.experience,
-    learnedSkills: b.learnedSkills,
-    totalKills: b.totalKills,
-    totalFood: b.totalFood,
-    isLeader: b.isLeader,
-    isEmperor: b.isEmperor,
-    inventory: b.inventory || 0,
-    maxInventory: b.maxInventory || 0
-  };
-  
-  try {
-    fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2), "utf-8");
-  } catch (err) {
-    console.error(`Error saving memory for bacteria ${b.id}:`, err);
-  }
-}
-
-function deleteBacteriumMemory(bacteriumId) {
-  const memoryFile = path.join(BACTERIA_MEMORY_DIR, `bacteria_${bacteriumId}.json`);
-  try {
-    if (fs.existsSync(memoryFile)) {
-      fs.unlinkSync(memoryFile);
-    }
-  } catch (err) {
-    console.error(`Error deleting memory for bacteria ${bacteriumId}:`, err);
-  }
-}
-
 // ---- ENTITIES ----
 class FoodParticle {
   constructor(x, y) {
     this.id = nextFoodId++;
+    this.x = x;
+    this.y = y;
+  }
+}
+
+class HealthFood {
+  constructor(x, y) {
+    this.id = nextHealthFoodId++;
     this.x = x;
     this.y = y;
   }
@@ -386,7 +348,6 @@ class Cytophage {
         this.familyColor = fam.familyColor;
         this.familyName = fam.familyName;
       } else {
-        // Если лимит достигнут - присоединяемся к случайному клану
         const randomBact = bacteriaArray[randInt(0, bacteriaArray.length - 1)];
         if (randomBact) {
           this.familyId = randomBact.familyId;
@@ -411,7 +372,7 @@ class Cytophage {
     this.childrenAlive = 0;
     this.childrenDead = 0;
 
-    // ---- НОВОЕ: HP И БОЙ ----
+    // ---- HP И БОЙ ----
     const ageYears = this.ageTicks / TICKS_PER_YEAR;
     this.maxHp = calculateMaxHP(ageYears);
     this.hp = hp !== null ? hp : this.maxHp;
@@ -419,7 +380,7 @@ class Cytophage {
     this.isAggressive = false;
     this.lastAggressionYear = -999;
 
-    // ---- НОВОЕ: ИНТЕЛЛЕКТ ----
+    // ---- ИНТЕЛЛЕКТ ----
     this.intelligence = BASE_INTELLIGENCE;
     this.experience = experience;
     this.totalKills = totalKills;
@@ -430,11 +391,11 @@ class Cytophage {
       survival: 1
     };
 
-    // ---- НОВОЕ: ИНВЕНТАРЬ (ТОЛЬКО ДЛЯ ЛИДЕРОВ) ----
+    // ---- ИНВЕНТАРЬ (ТОЛЬКО ДЛЯ ЛИДЕРОВ) ----
     this.inventory = 0;
     this.maxInventory = BASE_INVENTORY;
 
-    // ---- НОВОЕ: ИМПЕРАТОР ----
+    // ---- ИМПЕРАТОР ----
     this.isEmperor = false;
 
     stats.totalBorn += 1;
@@ -445,17 +406,6 @@ class Cytophage {
       }
       childrenMap.get(parentId).add(this.id);
     }
-
-    saveBacteriumMemory(this);
-
-    logEvent({
-      type: "birth",
-      id: this.id,
-      parentId: this.parentId,
-      generation: this.generation,
-      familyId: this.familyId,
-      time: new Date().toISOString()
-    });
   }
 
   get ageYears() {
@@ -473,7 +423,6 @@ class Cytophage {
     this.strength = calculateStrength(age);
     this.intelligence = BASE_INTELLIGENCE + Math.floor(this.experience / 100);
     
-    // Обучение навыкам
     if (this.totalFood > 50) this.learnedSkills.hunting = Math.min(10, Math.floor(this.totalFood / 50));
     if (this.totalKills > 5) this.learnedSkills.combat = Math.min(10, Math.floor(this.totalKills / 5));
     if (age > 20) this.learnedSkills.survival = Math.min(10, Math.floor(age / 20));
@@ -486,19 +435,16 @@ function saveState() {
     world,
     nextBacteriaId,
     nextFoodId,
+    nextHealthFoodId,
     nextFamilyId,
     bacteria: bacteriaArray,
     food: foodArray,
+    healthFood: healthFoodArray,
     stats: { ...stats, lastSavedAt: new Date().toISOString() }
   };
   try {
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2), "utf-8");
     stats.lastSavedAt = data.stats.lastSavedAt;
-    
-    // Сохранить память всех живых бактерий
-    for (const b of bacteriaArray) {
-      saveBacteriumMemory(b);
-    }
   } catch (err) {
     console.error("Error saving state:", err);
   }
@@ -518,10 +464,10 @@ function loadState() {
     world = data.world || world;
     nextBacteriaId = data.nextBacteriaId || 1;
     nextFoodId = data.nextFoodId || 1;
+    nextHealthFoodId = data.nextHealthFoodId || 1;
     nextFamilyId = data.nextFamilyId || 1;
     stats = { ...stats, ...data.stats };
 
-    // ИСПРАВЛЕНИЕ: Если bacteria пустой - инициализируем новый мир
     if (!data.bacteria || data.bacteria.length === 0) {
       console.log("State file exists but bacteria array is empty, init new world");
       initWorld();
@@ -579,10 +525,18 @@ function loadState() {
       return fp;
     });
 
+    healthFoodArray = (data.healthFood || []).map(hf => {
+      const hp = new HealthFood(hf.x, hf.y);
+      hp.id = hf.id;
+      return hp;
+    });
+
     const maxBId = bacteriaArray.reduce((m, b) => Math.max(m, b.id), 0);
     const maxFId = foodArray.reduce((m, f) => Math.max(m, f.id), 0);
+    const maxHFId = healthFoodArray.reduce((m, hf) => Math.max(m, hf.id), 0);
     nextBacteriaId = Math.max(nextBacteriaId, maxBId + 1);
     nextFoodId = Math.max(nextFoodId, maxFId + 1);
+    nextHealthFoodId = Math.max(nextHealthFoodId, maxHFId + 1);
 
     const maxFamId = bacteriaArray.reduce((m, b) => Math.max(m, b.familyId || 0), 0);
     nextFamilyId = Math.max(nextFamilyId, maxFamId + 1);
@@ -629,16 +583,6 @@ function updateChildrenStats() {
   }
 }
 
-// ---- EVENT LOG ----
-function logEvent(obj) {
-  const line = JSON.stringify(obj) + "\n";
-  try {
-    fs.appendFileSync(EVENTS_FILE, line, "utf-8");
-  } catch (err) {
-    console.error("Error writing event:", err);
-  }
-}
-
 // ---- WORLD INIT ----
 function spawnFoodRandom() {
   const x = randRange(0, world.width);
@@ -646,12 +590,20 @@ function spawnFoodRandom() {
   foodArray.push(new FoodParticle(x, y));
 }
 
+function spawnHealthFoodRandom() {
+  const x = randRange(0, world.width);
+  const y = randRange(0, world.height);
+  healthFoodArray.push(new HealthFood(x, y));
+}
+
 function initWorld() {
   world = { width: WORLD_WIDTH, height: WORLD_HEIGHT };
   bacteriaArray = [];
   foodArray = [];
+  healthFoodArray = [];
   nextBacteriaId = 1;
   nextFoodId = 1;
+  nextHealthFoodId = 1;
   nextFamilyId = 1;
   childrenMap.clear();
   usedClanSlots.clear();
@@ -662,6 +614,10 @@ function initWorld() {
 
   for (let i = 0; i < TARGET_FOOD_COUNT; i++) {
     spawnFoodRandom();
+  }
+
+  for (let i = 0; i < TARGET_HEALTH_FOOD_COUNT; i++) {
+    spawnHealthFoodRandom();
   }
 }
 
@@ -676,6 +632,9 @@ function distanceSq(ax, ay, bx, by) {
 function maintainFood() {
   while (foodArray.length < TARGET_FOOD_COUNT) {
     spawnFoodRandom();
+  }
+  while (healthFoodArray.length < TARGET_HEALTH_FOOD_COUNT) {
+    spawnHealthFoodRandom();
   }
 }
 
@@ -703,14 +662,12 @@ function updateFamilyLeaders() {
       console.log(`👑 ${b.name} стал лидером клана ${b.familyName}`);
     }
     
-    // Обновить инвентарь для лидеров
     if (b.isLeader) {
       const rec = getFamilyCircle(b.familyId);
       const memberCount = rec ? rec.memberCount : 1;
       b.maxInventory = calculateMaxInventory(memberCount, b.ageYears);
     }
     
-    // Проверить статус императора
     if (b.isLeader) {
       const rec = getFamilyCircle(b.familyId);
       const wasEmperor = b.isEmperor;
@@ -731,14 +688,27 @@ function maybeBranchAdult(b) {
   if (!isMaxSize(b)) return;
   if (b.hasBranched) return;
   
-  // Проверяем лимит кланов
   if (getActiveClanCount() >= MAX_CLANS) {
-    // Не можем создать новый клан - остаемся в текущем
     return;
   }
 
   const fam = createFamily();
   if (!fam) return;
+  
+  // Выталкивание из старого круга
+  const oldCircle = getFamilyCircle(b.familyId);
+  if (oldCircle && oldCircle.leaderId) {
+    const dx = b.x - oldCircle.leaderX;
+    const dy = b.y - oldCircle.leaderY;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const pushDist = oldCircle.radius + 50;
+    b.x = oldCircle.leaderX + (dx / dist) * pushDist;
+    b.y = oldCircle.leaderY + (dy / dist) * pushDist;
+    
+    // Придать начальную скорость
+    b.vx = (dx / dist) * 3;
+    b.vy = (dy / dist) * 3;
+  }
   
   b.familyId = fam.familyId;
   b.familyColor = fam.familyColor;
@@ -802,7 +772,7 @@ function markOrphans() {
   }
 }
 
-// ---- НОВОЕ: СИСТЕМА БОЕВ ----
+// ---- СИСТЕМА БОЕВ ----
 function handleCombat() {
   const activeClanCount = getActiveClanCount();
   
@@ -810,9 +780,7 @@ function handleCombat() {
   for (const leader of bacteriaArray) {
     if (!leader.isLeader) continue;
     
-    // Проверка кулдауна агрессии
     if (leader.ageYears - leader.lastAggressionYear > AGGRESSION_COOLDOWN_YEARS) {
-      // Шанс стать агрессивным (зависит от голода и силы)
       const hungerFactor = leader.hunger < 30 ? 2 : 1;
       const chance = AGGRESSION_CHANCE * hungerFactor;
       
@@ -823,7 +791,6 @@ function handleCombat() {
       }
     }
     
-    // Агрессия длится 10 тиков
     if (leader.isAggressive) {
       const ticksSinceAggression = (leader.ageYears - leader.lastAggressionYear) * TICKS_PER_YEAR;
       if (ticksSinceAggression > 10) {
@@ -836,7 +803,6 @@ function handleCombat() {
   for (const b of bacteriaArray) {
     if (b.hp <= 0) continue;
     
-    // Найти врагов в радиусе атаки
     const myCircle = getFamilyCircle(b.familyId);
     if (!myCircle) continue;
     
@@ -848,13 +814,11 @@ function handleCombat() {
       const enemyCircle = getFamilyCircle(enemy.familyId);
       if (!enemyCircle) continue;
       
-      // Проверка: пересекаются ли круги кланов?
       const distBetweenLeaders = Math.sqrt(distanceSq(myCircle.leaderX, myCircle.leaderY, enemyCircle.leaderX, enemyCircle.leaderY));
       const circlesOverlap = distBetweenLeaders < (myCircle.radius + enemyCircle.radius);
       
       if (!circlesOverlap) continue;
       
-      // Проверка: один из лидеров агрессивен?
       const myLeader = bacteriaArray.find(l => l.id === myCircle.leaderId);
       const enemyLeader = bacteriaArray.find(l => l.id === enemyCircle.leaderId);
       
@@ -862,27 +826,10 @@ function handleCombat() {
       
       if (!isAggressiveSituation) continue;
       
-      // Проверка: враг в радиусе атаки (размер бактерии * 3)?
       const distToEnemy = Math.sqrt(distanceSq(b.x, b.y, enemy.x, enemy.y));
       const attackRange = (b.size + enemy.size) * 3;
       
       if (distToEnemy > attackRange) continue;
-      
-      // Лидер НЕ может заходить за чужой круг
-      if (b.isLeader) {
-        const distToEnemyLeader = Math.sqrt(distanceSq(b.x, b.y, enemyCircle.leaderX, enemyCircle.leaderY));
-        if (distToEnemyLeader < enemyCircle.radius) {
-          // Отталкиваем лидера от чужого круга
-          const dx = b.x - enemyCircle.leaderX;
-          const dy = b.y - enemyCircle.leaderY;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const ux = dx / dist;
-          const uy = dy / dist;
-          b.vx += ux * 2;
-          b.vy += uy * 2;
-          continue; // Лидер не может атаковать из-за границы
-        }
-      }
       
       // АТАКА!
       const damage = calculateDamage(b.strength);
@@ -894,23 +841,13 @@ function handleCombat() {
         b.experience += EXPERIENCE_PER_KILL;
         stats.totalKills++;
         console.log(`⚔️ ${b.name} убил ${enemy.name}! Урон: ${damage}`);
-        
-        logEvent({
-          type: "kill",
-          killerId: b.id,
-          victimId: enemy.id,
-          damage: damage,
-          time: new Date().toISOString()
-        });
       }
     }
   }
 }
 
-// ---- ФИЗИКА СТОЛКНОВЕНИЙ ----
+// ---- ФИЗИКА СТОЛКНОВЕНИЙ (ДЛЯ ВСЕХ) ----
 function handleCollisions(b) {
-  if (b.isLeader) return;
-  
   let collisionX = 0;
   let collisionY = 0;
 
@@ -956,7 +893,35 @@ function enforceClanWalls() {
   for (const b of bacteriaArray) {
     maybeBranchAdult(b);
 
-    if (b.isLeader) continue;
+    if (b.isLeader) {
+      // Лидер НЕ может пересекать чужие круги
+      for (const otherCircle of familyCircles.values()) {
+        if (otherCircle.familyId === b.familyId) continue;
+        if (!otherCircle.leaderId) continue;
+        
+        const dx = b.x - otherCircle.leaderX;
+        const dy = b.y - otherCircle.leaderY;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const r = otherCircle.radius || 40;
+        
+        if (dist < r) {
+          // Выталкиваем лидера из чужого круга
+          const ux = dx / dist;
+          const uy = dy / dist;
+          b.x = otherCircle.leaderX + ux * r;
+          b.y = otherCircle.leaderY + uy * r;
+          
+          // Отражение скорости
+          const outward = b.vx * ux + b.vy * uy;
+          if (outward < 0) {
+            b.vx -= outward * ux * 1.5;
+            b.vy -= outward * uy * 1.5;
+          }
+        }
+      }
+      continue;
+    }
+    
     if (isMaxSize(b)) continue;
 
     const rec = getFamilyCircle(b.familyId);
@@ -967,7 +932,6 @@ function enforceClanWalls() {
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
 
-    // Мягкая зона
     const softZone = strictWall ? CLAN_EDGE_HARD_WALL : CLAN_EDGE_SOFT_ZONE;
     
     if (dist > r * softZone && dist <= r) {
@@ -980,7 +944,6 @@ function enforceClanWalls() {
 
     if (dist <= r) continue;
 
-    // Жесткая стена
     const ux = dx / dist;
     const uy = dy / dist;
     b.x = rec.leaderX + ux * r;
@@ -1015,40 +978,76 @@ function feedFamilyFromLeader(leader) {
   }
 }
 
-// ---- ПОИСК ЕДЫ ----
-function findBestFoodFor(b) {
-  let bestFood = null;
-  let bestScore = Infinity;
+// ---- ПОИСК ЕДЫ / HEALTH FOOD ----
+function findBestTargetFor(b) {
   const visionRadiusSq = b.visionRadius * b.visionRadius;
-
-  for (const food of foodArray) {
-    const distSq = distanceSq(b.x, b.y, food.x, food.y);
-    if (distSq > visionRadiusSq) continue;
-    const dist = Math.sqrt(distSq);
-
-    let familyBonus = 0;
-    for (const other of bacteriaArray) {
-      if (other === b) continue;
-      if (other.familyId !== b.familyId) continue;
-      const odSq = distanceSq(other.x, other.y, food.x, food.y);
-      const od = Math.sqrt(odSq) || 1;
-      familyBonus += 50 / od;
-    }
-
-    const score = dist - familyBonus;
-    if (score < bestScore) {
-      bestScore = score;
-      bestFood = food;
+  
+  // Приоритет: если HP критично (<30%) - ищем health food
+  const hpRatio = b.hp / b.maxHp;
+  const needsHealthUrgently = hpRatio < 0.3;
+  
+  let bestTarget = null;
+  let bestScore = Infinity;
+  let targetType = null;
+  
+  // Если HP критично - приоритет на health food
+  if (needsHealthUrgently && b.isLeader) {
+    for (const hf of healthFoodArray) {
+      const distSq = distanceSq(b.x, b.y, hf.x, hf.y);
+      if (distSq > visionRadiusSq) continue;
+      const dist = Math.sqrt(distSq);
+      
+      // Здоровье критично - максимальный приоритет
+      const score = dist * 0.5;
+      if (score < bestScore) {
+        bestScore = score;
+        bestTarget = hf;
+        targetType = 'health';
+      }
     }
   }
+  
+  // Если не нашли health food или HP не критично - ищем обычную еду
+  if (!bestTarget) {
+    for (const food of foodArray) {
+      const distSq = distanceSq(b.x, b.y, food.x, food.y);
+      if (distSq > visionRadiusSq) continue;
+      const dist = Math.sqrt(distSq);
 
-  return bestFood;
+      let familyBonus = 0;
+      for (const other of bacteriaArray) {
+        if (other === b) continue;
+        if (other.familyId !== b.familyId) continue;
+        const odSq = distanceSq(other.x, other.y, food.x, food.y);
+        const od = Math.sqrt(odSq) || 1;
+        familyBonus += 50 / od;
+      }
+
+      const score = dist - familyBonus;
+      if (score < bestScore) {
+        bestScore = score;
+        bestTarget = food;
+        targetType = 'food';
+      }
+    }
+  }
+  
+  // По пути к health food лидер собирает обычную еду
+  if (bestTarget && targetType === 'health' && b.isLeader) {
+    for (const food of foodArray) {
+      const distToFood = Math.sqrt(distanceSq(b.x, b.y, food.x, food.y));
+      if (distToFood < b.size * 3) {
+        return { target: food, type: 'food' };
+      }
+    }
+  }
+  
+  return bestTarget ? { target: bestTarget, type: targetType } : null;
 }
 
 // ---- РАЗМНОЖЕНИЕ (ТОЛЬКО ЛИДЕРЫ) ----
 function maybeReproduce(b, newChildren) {
   try {
-    // ТОЛЬКО ЛИДЕРЫ МОГУТ РАЗМНОЖАТЬСЯ!
     if (!b.isLeader) return;
     
     const ageYears = b.ageYears;
@@ -1102,14 +1101,11 @@ function updateBacteria() {
       b.ageTicks += 1;
       const ageYears = b.ageYears;
       
-      // Обновить статы
       b.updateStats();
       b.experience += EXPERIENCE_PER_TICK;
 
-      // Голод
       let hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
       
-      // Увеличенный расход для лидеров и старших
       if (b.isLeader) hungerDrain *= 1.5;
       if (ageYears > 40) hungerDrain *= 1 + ((ageYears - 40) / 100);
       
@@ -1120,51 +1116,21 @@ function updateBacteria() {
       b.hunger -= hungerDrain;
       if (b.hunger < 0) b.hunger = 0;
 
-      // Смерть от голода
       if (b.hunger <= 0) {
         deadIds.add(b.id);
         stats.totalDied += 1;
-        deleteBacteriumMemory(b.id);
-        logEvent({
-          type: "death",
-          id: b.id,
-          reason: "starvation",
-          ageYears,
-          familyName: b.familyName,
-          time: new Date().toISOString()
-        });
         continue;
       }
       
-      // Смерть от HP
       if (b.hp <= 0) {
         deadIds.add(b.id);
         stats.totalDied += 1;
-        deleteBacteriumMemory(b.id);
-        logEvent({
-          type: "death",
-          id: b.id,
-          reason: "combat",
-          ageYears,
-          familyName: b.familyName,
-          time: new Date().toISOString()
-        });
         continue;
       }
 
-      // Смерть от старости
       if (ageYears >= b.lifespanYears) {
         deadIds.add(b.id);
         stats.totalDied += 1;
-        deleteBacteriumMemory(b.id);
-        logEvent({
-          type: "death",
-          id: b.id,
-          reason: "old_age",
-          ageYears,
-          familyName: b.familyName,
-          time: new Date().toISOString()
-        });
         continue;
       }
 
@@ -1177,10 +1143,10 @@ function updateBacteria() {
       handleCollisions(b);
 
       if (!b.isOrphaned) {
-        const bestFood = findBestFoodFor(b);
-        if (bestFood) {
-          const dx = bestFood.x - b.x;
-          const dy = bestFood.y - b.y;
+        const targetInfo = findBestTargetFor(b);
+        if (targetInfo) {
+          const dx = targetInfo.target.x - b.x;
+          const dy = targetInfo.target.y - b.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
           const desiredVx = (dx / dist) * b.maxSpeed;
@@ -1245,10 +1211,12 @@ function updateBacteria() {
 // ---- EATING ----
 function handleEating() {
   const eatenFoodIds = new Set();
+  const eatenHealthFoodIds = new Set();
 
   for (const b of bacteriaArray) {
     if (b.isOrphaned) continue;
     
+    // Обычная еда
     for (const f of foodArray) {
       if (eatenFoodIds.has(f.id)) continue;
       const distSq = distanceSq(b.x, b.y, f.x, f.y);
@@ -1256,7 +1224,6 @@ function handleEating() {
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
         
-        // Базовое насыщение
         b.hunger += FOOD_HUNGER_GAIN;
         if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
         b.sizePoints = (b.sizePoints || 0) + SIZE_GAIN_PER_FOOD;
@@ -1265,14 +1232,11 @@ function handleEating() {
         b.totalFood++;
         b.experience += EXPERIENCE_PER_FOOD;
         
-        // НОВАЯ ЛОГИКА: Только соклановцы приносят еду в инвентарь лидера
         if (!b.isLeader) {
-          // Найти лидера клана
           const leader = bacteriaArray.find(l => l.isLeader && l.familyId === b.familyId);
           if (leader) {
-            // Если НЕ лидер наелся и вырос - отдаёт лишнее лидеру
             if (b.hunger >= b.maxHunger && b.sizePoints >= b.maxSizePoints) {
-              const foodWeight = 0.5; // кг за единицу еды
+              const foodWeight = 1; // 1 к 1 - целое число
               if (leader.inventory < leader.maxInventory) {
                 leader.inventory += foodWeight;
                 if (leader.inventory > leader.maxInventory) leader.inventory = leader.maxInventory;
@@ -1281,16 +1245,42 @@ function handleEating() {
           }
         }
         
-        // Лидер кормит семью из своих запасов
         if (b.isLeader) {
           feedFamilyFromLeader(b);
         }
+      }
+    }
+    
+    // Health food - восстанавливает HP всему клану
+    for (const hf of healthFoodArray) {
+      if (eatenHealthFoodIds.has(hf.id)) continue;
+      const distSq = distanceSq(b.x, b.y, hf.x, hf.y);
+      const eatRadius = b.size * 1.3;
+      if (distSq < eatRadius * eatRadius) {
+        eatenHealthFoodIds.add(hf.id);
+        
+        // Восстанавливает HP всем членам клана
+        const rec = getFamilyCircle(b.familyId);
+        if (rec) {
+          for (const member of bacteriaArray) {
+            if (member.familyId === b.familyId) {
+              member.hp += HEALTH_FOOD_HP_RESTORE;
+              if (member.hp > member.maxHp) member.hp = member.maxHp;
+            }
+          }
+        }
+        
+        console.log(`❤️ ${b.name} собрал health food! Клан ${b.familyName} восстановил HP`);
       }
     }
   }
 
   if (eatenFoodIds.size > 0) {
     foodArray = foodArray.filter(f => !eatenFoodIds.has(f.id));
+  }
+  
+  if (eatenHealthFoodIds.size > 0) {
+    healthFoodArray = healthFoodArray.filter(hf => !eatenHealthFoodIds.has(hf.id));
   }
 }
 
@@ -1299,35 +1289,18 @@ function leaderEatFromInventory() {
   for (const b of bacteriaArray) {
     if (!b.isLeader) continue;
     
-    // Лидер ест из инвентаря только когда голод < 20
     if (b.hunger < 20 && b.inventory > 0) {
-      // Умное потребление: берёт ровно столько сколько нужно до 50 голода
       const neededHunger = 50 - b.hunger;
-      const foodToEat = Math.min(neededHunger / FOOD_HUNGER_GAIN, b.inventory / 0.5);
+      const foodToEat = Math.min(Math.floor(neededHunger / FOOD_HUNGER_GAIN), b.inventory);
       
-      // Конвертируем еду в голод
       const hungerGained = foodToEat * FOOD_HUNGER_GAIN;
       b.hunger += hungerGained;
       if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
       
-      // Уменьшаем инвентарь
-      const inventoryUsed = foodToEat * 0.5;
-      b.inventory -= inventoryUsed;
+      b.inventory -= foodToEat;
       if (b.inventory < 0) b.inventory = 0;
       
-      // Логирование
-      console.log(`🍖 ${b.name} съел ${inventoryUsed.toFixed(1)} кг из запасов. Голод: ${b.hunger.toFixed(1)}, Осталось: ${b.inventory.toFixed(1)} кг`);
-      
-      logEvent({
-        type: "inventory_eat",
-        leaderId: b.id,
-        leaderName: b.name,
-        familyName: b.familyName,
-        inventoryUsed: inventoryUsed.toFixed(2),
-        hungerAfter: b.hunger.toFixed(1),
-        inventoryLeft: b.inventory.toFixed(1),
-        time: new Date().toISOString()
-      });
+      console.log(`🍖 ${b.name} съел ${foodToEat} еды из запасов. Голод: ${b.hunger.toFixed(1)}, Осталось: ${b.inventory}`);
     }
   }
 }
@@ -1350,7 +1323,7 @@ function tick() {
     handleCombat();
     enforceClanWalls();
     handleEating();
-    leaderEatFromInventory(); // НОВОЕ: Лидер ест из инвентаря
+    leaderEatFromInventory();
     maintainFood();
     updateChildrenStats();
 
@@ -1372,6 +1345,7 @@ app.get("/ping", (req, res) => {
     lastSelfPing: lastPingTime,
     bacteriaCount: bacteriaArray.length,
     foodCount: foodArray.length,
+    healthFoodCount: healthFoodArray.length,
     activeClans: getActiveClanCount()
   });
 });
@@ -1416,7 +1390,8 @@ app.get("/state", (req, res) => {
       maxInventory: b.maxInventory,
       clanRadius: b.isLeader ? (getFamilyCircle(b.familyId)?.radius ?? null) : null
     })),
-    food: foodArray.map(f => ({ id: f.id, x: f.x, y: f.y }))
+    food: foodArray.map(f => ({ id: f.id, x: f.x, y: f.y })),
+    healthFood: healthFoodArray.map(hf => ({ id: hf.id, x: hf.x, y: hf.y }))
   });
 });
 
@@ -1438,9 +1413,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Cytophage world server running on port ${PORT}`);
   console.log(`🌍 Server URL: ${SERVER_URL}`);
+  console.log(`🗺️ Map size: ${WORLD_WIDTH}x${WORLD_HEIGHT}`);
   console.log(`⚔️ Combat system: ENABLED`);
   console.log(`👑 Max clans: ${MAX_CLANS}`);
-  console.log(`📦 Inventory system: ENABLED (SMART LEADERS)`);
+  console.log(`📦 Inventory system: ENABLED (1:1 REAL COUNT)`);
+  console.log(`❤️ Health food system: ENABLED`);
   console.log(`🧠 Intelligence system: ENABLED`);
   
   setTimeout(() => {
