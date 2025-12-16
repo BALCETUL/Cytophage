@@ -21,7 +21,7 @@
     .hud {
       position: fixed; left: 10px; top: 10px; padding: 8px 12px;
       background: rgba(0, 0, 0, 0.6); border-radius: 8px; font-size: 12px;
-      pointer-events: none; max-width: 360px;
+      pointer-events: none; max-width: 420px;
     }
     .hud .row { margin-top: 3px; white-space: nowrap; }
     .hud .row span.label { display: inline-block; min-width: 110px; color: #8b949e; }
@@ -62,6 +62,7 @@
     .leader-name { font-weight: 500; }
     .leader-clan { color: #8b949e; margin-left: 6px; }
     .leader-info { font-size: 11px; color: #c9d1d9; white-space: nowrap; }
+    .combat-indicator { color: #ff4444; font-weight: 600; }
 
     #selectedBacteriumDetail {
       width: 280px; padding: 10px 12px; background: rgba(0, 0, 0, 0.6);
@@ -89,6 +90,7 @@
     <div class="row" id="hudRow1"></div>
     <div class="row" id="hudRow2"></div>
     <div class="row" id="hudRow3"></div>
+    <div class="row" id="hudRow4"></div>
   </div>
 
   <div class="right-container">
@@ -111,6 +113,7 @@
     const hudRow1 = document.getElementById("hudRow1");
     const hudRow2 = document.getElementById("hudRow2");
     const hudRow3 = document.getElementById("hudRow3");
+    const hudRow4 = document.getElementById("hudRow4");
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
@@ -320,7 +323,6 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
-      // Обычная еда (зелёная)
       ctx.save();
       for (const f of foodRaw) {
         const p = worldToScreen(f.x, f.y);
@@ -333,7 +335,6 @@
       }
       ctx.restore();
 
-      // Health food (красная)
       ctx.save();
       for (const hf of healthFoodRaw) {
         const p = worldToScreen(hf.x, hf.y);
@@ -389,11 +390,7 @@
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         
-        if (b.isOrphaned) {
-          ctx.fillStyle = "#555555";
-        } else {
-          ctx.fillStyle = b.familyColor || "#58a6ff";
-        }
+        ctx.fillStyle = b.familyColor || "#58a6ff";
         
         ctx.shadowBlur = radius * 1.5;
         ctx.shadowColor = ctx.fillStyle;
@@ -488,10 +485,12 @@
       let maxGeneration = 0;
       let maxAge = 0;
       let emperorCount = 0;
+      let inCombatCount = 0;
       for (const b of bacteriaRaw) {
         if (b.generation > maxGeneration) maxGeneration = b.generation;
         if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
         if (b.isEmperor) emperorCount++;
+        if (b.isInCombat) inCombatCount++;
       }
 
       const totalBorn = lastStats ? lastStats.totalBorn : 0;
@@ -500,18 +499,23 @@
       const activeClans = lastStats ? lastStats.activeClans : 0;
 
       hudRow1.innerHTML =
+        `<span class="label">Карта:</span><span class="value">${world.width}x${world.height}</span>` +
         `<span class="label">Бактерий:</span><span class="value">${count}</span>` +
-        `<span class="label">Еда:</span><span class="value">${foodCount}</span>` +
-        `<span class="label">HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span>`;
+        `<span class="label">В бою:</span><span class="value" style="color:${inCombatCount > 0 ? '#ff4444' : '#2ea043'};">${inCombatCount}</span>`;
 
       hudRow2.innerHTML =
-        `<span class="label">Родилось:</span><span class="value">${totalBorn}</span>` +
-        `<span class="label">Умерло:</span><span class="value">${totalDied}</span>` +
+        `<span class="label">Еда:</span><span class="value">${foodCount}</span>` +
+        `<span class="label">HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span>` +
         `<span class="label">Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span>`;
 
       hudRow3.innerHTML =
-        `<span class="label">Убийств:</span><span class="value">${totalKills}</span>` +
+        `<span class="label">Родилось:</span><span class="value">${totalBorn}</span>` +
+        `<span class="label">Умерло:</span><span class="value">${totalDied}</span>` +
+        `<span class="label">Убийств:</span><span class="value">${totalKills}</span>`;
+
+      hudRow4.innerHTML =
         `<span class="label">Макс. поколение:</span><span class="value">${Math.floor(maxGeneration)}</span>` +
+        `<span class="label">Макс. возраст:</span><span class="value">${maxAge.toFixed(1)} лет</span>` +
         `<span class="label">Императоров:</span><span class="value" style="color:#ffd700;">${emperorCount}</span>`;
     }
 
@@ -554,13 +558,14 @@
         const ageLabel = formatAgeLabel(b.ageYears);
         const size = clanSize.get(b.familyId || 0) || 1;
         const leaderMark = b.isEmperor ? " 👑⭐" : (b.isLeader ? " ⭐" : (b.isSuccessor ? " 👑" : ""));
+        const combatMark = b.isInCombat ? ' <span class="combat-indicator">⚔️</span>' : '';
         const selectedClass = (selectedBacteriumId === b.id) ? " row-selected" : "";
         const hp = Math.round(b.hp ?? 100);
         const maxHp = Math.round(b.maxHp ?? 100);
         const strength = Math.round(b.strength ?? 10);
         html += `<div class="leader-row${selectedClass}" data-id="${b.id}">
           <div class="leader-main">
-            <span class="leader-name" style="color: ${b.familyColor || "#58a6ff"};">${index}. ${b.name}${leaderMark}</span>
+            <span class="leader-name" style="color: ${b.familyColor || "#58a6ff"};">${index}. ${b.name}${leaderMark}${combatMark}</span>
             <span class="leader-clan">${b.familyName || ""}</span>
           </div>
           <div class="leader-info">
@@ -591,9 +596,9 @@
 
       const isLeader = !!b.isLeader;
       const isSuccessor = !!b.isSuccessor;
-      const isOrphaned = !!b.isOrphaned;
       const isEmperor = !!b.isEmperor;
       const isAggressive = !!b.isAggressive;
+      const isInCombat = !!b.isInCombat;
       
       let statusHtml;
       if (isEmperor) {
@@ -602,8 +607,6 @@
         statusHtml = '<span style="color:#ffeb3b; font-weight:600;">ЛИДЕР ⭐</span>';
       } else if (isSuccessor) {
         statusHtml = '<span style="color:#ffd700; font-weight:600;">Выбран в преемники 👑</span>';
-      } else if (isOrphaned) {
-        statusHtml = '<span style="color:#ff4444; font-weight:600;">Сирота 💀</span>';
       } else {
         statusHtml = '<span style="color:#888;">Член клана</span>';
       }
@@ -637,10 +640,16 @@
         aggressiveHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Состояние:</span> АГРЕССИВЕН!</div>';
       }
 
+      let combatHtml = "";
+      if (isInCombat) {
+        combatHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Бой:</span> В СРАЖЕНИИ!</div>';
+      }
+
       detailContent.innerHTML = `
         <div class="detail-row"><span class="label">Имя:</span> <span style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
         <div class="detail-row"><span class="label">Статус:</span> ${statusHtml}</div>
         ${aggressiveHtml}
+        ${combatHtml}
         <div class="detail-row"><span class="label">Клан:</span> <span style="color:${clanColor};">${clanName}${b.familyId ? ` (ID: ${b.familyId})` : ""}</span></div>
         <div class="detail-row"><span class="label">Радиус клана:</span> ${clanRadius}</div>
         <div class="detail-row" style="border-top: 2px solid #2ea043; margin-top:5px; padding-top:5px;"><span class="label">❤️ HP:</span> ${hp} / ${maxHp}</div>
