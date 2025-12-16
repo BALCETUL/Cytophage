@@ -1,7 +1,7 @@
 {
   "name": "cytophage-world-server",
-  "version": "1.0.0",
-  "description": "24/7 Cytophage world simulation with file persistence",
+  "version": "2.0.0",
+  "description": "24/7 Cytophage world simulation - Enhanced version",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
