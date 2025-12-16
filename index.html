@@ -77,6 +77,11 @@
     .detail-row .label {
       color: #8b949e; display: inline-block; min-width: 100px;
     }
+    .skills-block {
+      margin-top: 3px;
+      padding-left: 10px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -624,7 +629,7 @@
       const totalFood = b.totalFood ?? 0;
       
       const skills = b.learnedSkills || { hunting: 1, combat: 1, survival: 1 };
-      const skillsHtml = `Охота: ${skills.hunting}/10, Бой: ${skills.combat}/10, Выживание: ${skills.survival}/10`;
+      const skillsHtml = `<div class="skills-block">🎯 Охота: ${skills.hunting}/10<br>⚔️ Бой: ${skills.combat}/10<br>🛡️ Выживание: ${skills.survival}/10</div>`;
       
       const damageEstimate = `${1 + Math.floor(strength / 20)}-${5 + Math.floor(strength / 20)}`;
       
@@ -657,7 +662,7 @@
         <div class="detail-row"><span class="label">⚔️ Урон:</span> ${damageEstimate}</div>
         <div class="detail-row"><span class="label">🧠 Интеллект:</span> ${intelligence}</div>
         <div class="detail-row"><span class="label">⭐ Опыт:</span> ${experience}</div>
-        <div class="detail-row"><span class="label">📚 Навыки:</span> ${skillsHtml}</div>
+        <div class="detail-row"><span class="label">📚 Навыки:</span>${skillsHtml}</div>
         <div class="detail-row" style="border-top: 2px solid #2ea043; margin-top:5px; padding-top:5px;"><span class="label">Возраст:</span> ${ageLabel} (${ageYears.toFixed(2)} лет)</div>
         <div class="detail-row"><span class="label">Поколение:</span> ${Math.floor(b.generation || 0)}</div>
         <div class="detail-row"><span class="label">Размер:</span> ${Math.round(sizePoints)}/${maxSizePoints}</div>
