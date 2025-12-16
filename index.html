@@ -129,7 +129,7 @@
       canvas.height = height;
     });
 
-    let world = { width: 8000, height: 8000 };
+    let world = { width: 15000, height: 15000 };
     let cameraX = world.width / 2;
     let cameraY = world.height / 2;
     let zoom = 0.1;
@@ -147,6 +147,7 @@
 
     let bacteriaRaw = [];
     let foodRaw = [];
+    let healthFoodRaw = [];
     const renderPositions = new Map();
 
     let selectedBacteriumId = null;
@@ -319,6 +320,7 @@
       ctx.strokeRect(topLeft.x, topLeft.y, w, h);
       ctx.restore();
 
+      // Обычная еда (зелёная)
       ctx.save();
       for (const f of foodRaw) {
         const p = worldToScreen(f.x, f.y);
@@ -328,6 +330,22 @@
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fillStyle = "hsl(120, 100%, 70%)";
         ctx.fill();
+      }
+      ctx.restore();
+
+      // Health food (красная)
+      ctx.save();
+      for (const hf of healthFoodRaw) {
+        const p = worldToScreen(hf.x, hf.y);
+        if (p.x < -20 || p.y < -20 || p.x > width + 20 || p.y > height + 20) continue;
+        const r = 2 * zoom;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 0, 0, 0.9)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 100, 100, 0.9)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
       ctx.restore();
 
@@ -465,6 +483,7 @@
     function updateLeftHud() {
       const count = bacteriaRaw.length;
       const foodCount = foodRaw.length;
+      const healthFoodCount = healthFoodRaw.length;
 
       let maxGeneration = 0;
       let maxAge = 0;
@@ -483,16 +502,16 @@
       hudRow1.innerHTML =
         `<span class="label">Бактерий:</span><span class="value">${count}</span>` +
         `<span class="label">Еда:</span><span class="value">${foodCount}</span>` +
-        `<span class="label">Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span>`;
+        `<span class="label">HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span>`;
 
       hudRow2.innerHTML =
         `<span class="label">Родилось:</span><span class="value">${totalBorn}</span>` +
         `<span class="label">Умерло:</span><span class="value">${totalDied}</span>` +
-        `<span class="label">Убийств:</span><span class="value">${totalKills}</span>`;
+        `<span class="label">Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span>`;
 
       hudRow3.innerHTML =
+        `<span class="label">Убийств:</span><span class="value">${totalKills}</span>` +
         `<span class="label">Макс. поколение:</span><span class="value">${Math.floor(maxGeneration)}</span>` +
-        `<span class="label">Макс. возраст:</span><span class="value">${maxAge.toFixed(1)} лет</span>` +
         `<span class="label">Императоров:</span><span class="value" style="color:#ffd700;">${emperorCount}</span>`;
     }
 
@@ -608,9 +627,9 @@
       
       let inventoryHtml = "";
       if (isLeader) {
-        const inventory = b.inventory ?? 0;
-        const maxInventory = b.maxInventory ?? 50;
-        inventoryHtml = `<div class="detail-row"><span class="label">Инвентарь:</span> ${inventory.toFixed(1)} / ${maxInventory.toFixed(0)} кг</div>`;
+        const inventory = Math.round(b.inventory ?? 0);
+        const maxInventory = Math.round(b.maxInventory ?? 50);
+        inventoryHtml = `<div class="detail-row"><span class="label">Инвентарь:</span> ${inventory} / ${maxInventory} шт</div>`;
       }
 
       let aggressiveHtml = "";
@@ -670,6 +689,7 @@
 
         bacteriaRaw = data.bacteria || [];
         foodRaw = data.food || [];
+        healthFoodRaw = data.healthFood || [];
         lastStats = data.stats || null;
 
         if (!lastServerOk) {
