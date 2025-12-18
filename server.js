@@ -13,8 +13,8 @@ const STATE_FILE = path.join(__dirname, "world_state.json");
 // ---- WORLD SETTINGS ----
 const WORLD_WIDTH = 15000;
 const WORLD_HEIGHT = 15000;
-const TARGET_FOOD_COUNT = 20000;
-const TARGET_HEALTH_FOOD_COUNT = 800;
+const TARGET_FOOD_COUNT = 25000;
+const TARGET_HEALTH_FOOD_COUNT = 1000;
 const TICK_INTERVAL = 80;
 const MS_PER_TICK = TICK_INTERVAL;
 
@@ -29,16 +29,16 @@ const MAX_LIFESPAN_YEARS = 100;
 
 // Голод
 const MAX_HUNGER = 100;
-const BASE_HUNGER_DRAIN = 0.008;
-const HUNGER_DRAIN_PER_SIZE = 0.00004;
-const FOOD_HUNGER_GAIN = 6;
-const BIRTH_HUNGER_COST = 30;
-const MIN_HUNGER_TO_REPRODUCE = 55;
+const BASE_HUNGER_DRAIN = 0.006;
+const HUNGER_DRAIN_PER_SIZE = 0.00003;
+const FOOD_HUNGER_GAIN = 8;
+const BIRTH_HUNGER_COST = 35;
+const MIN_HUNGER_TO_REPRODUCE = 60;
 
 // Размер
 const MAX_SIZE_POINTS = 1000;
-const SIZE_GAIN_PER_FOOD = 1.2;
-const CHILD_START_SIZE = 25;
+const SIZE_GAIN_PER_FOOD = 1.5;
+const CHILD_START_SIZE = 30;
 
 // ---- 15 ФИКСИРОВАННЫХ ЦВЕТОВ КЛАНОВ ----
 const MAX_CLANS = 15;
@@ -49,60 +49,60 @@ const CLAN_COLORS = [
 ];
 
 // ---- РАДИУС КЛАНА ----
-const CLAN_RADIUS_MIN = 50;
-const CLAN_RADIUS_MAX = 600;
-const CLAN_RADIUS_LEADER_GROWTH = 300;
-const CLAN_RADIUS_PER_SQRT_MEMBER = 15;
-const EMPEROR_RADIUS_THRESHOLD = 550;
+const CLAN_RADIUS_MIN = 60;
+const CLAN_RADIUS_MAX = 700;
+const CLAN_RADIUS_LEADER_GROWTH = 350;
+const CLAN_RADIUS_PER_SQRT_MEMBER = 18;
+const EMPEROR_RADIUS_THRESHOLD = 600;
 
 // Стена круга
-const CLAN_EDGE_SOFT_ZONE = 0.85;
-const CLAN_EDGE_PULL = 0.15;
+const CLAN_EDGE_SOFT_ZONE = 0.80;
+const CLAN_EDGE_PULL = 0.20;
 const CLAN_EDGE_HARD_WALL = 0.95;
 
 // Преемник
-const SUCCESSION_AGE_THRESHOLD = 0.8;
+const SUCCESSION_AGE_THRESHOLD = 0.75;
 
 // ---- HP И БОЙ ----
 const BASE_HP = 100;
-const HP_PER_YEAR_GROWTH = 12;
-const HP_PER_YEAR_DECLINE = 10;
+const HP_PER_YEAR_GROWTH = 14;
+const HP_PER_YEAR_DECLINE = 12;
 const PEAK_AGE = 40;
-const MAX_HP = 600;
+const MAX_HP = 700;
 
-const BASE_STRENGTH = 10;
-const STRENGTH_PER_YEAR = 2.5;
-const STRENGTH_DECLINE = 3.5;
+const BASE_STRENGTH = 12;
+const STRENGTH_PER_YEAR = 3;
+const STRENGTH_DECLINE = 4;
 
-const MIN_DAMAGE = 2;
-const MAX_DAMAGE = 6;
+const MIN_DAMAGE = 3;
+const MAX_DAMAGE = 8;
 
-const AGGRESSION_CHANCE = 0.0008;
-const AGGRESSION_COOLDOWN_YEARS = 4;
-const AGGRESSION_DURATION_TICKS = 300;
+const AGGRESSION_CHANCE = 0.0012;
+const AGGRESSION_COOLDOWN_YEARS = 3;
+const AGGRESSION_DURATION_TICKS = 400;
 
 // ---- HEALTH FOOD ----
-const HEALTH_FOOD_HP_RESTORE = 60;
+const HEALTH_FOOD_HP_RESTORE = 80;
 
 // ---- ИНВЕНТАРЬ (целые числа) ----
-const BASE_INVENTORY = 60;
-const INVENTORY_PER_MEMBER = 2.5;
-const INVENTORY_PER_YEAR = 4;
-const MAX_INVENTORY = 6000;
+const BASE_INVENTORY = 80;
+const INVENTORY_PER_MEMBER = 3;
+const INVENTORY_PER_YEAR = 5;
+const MAX_INVENTORY = 8000;
 
-// ---- ИНТЕЛЛЕКТ ----
-const BASE_INTELLIGENCE = 10;
-const EXPERIENCE_PER_TICK = 0.15;
-const EXPERIENCE_PER_FOOD = 1.5;
-const EXPERIENCE_PER_KILL = 75;
-const EXPERIENCE_PER_BIRTH = 15;
+// ---- ИНТЕЛЛЕКТ И ОПЫТ ----
+const BASE_INTELLIGENCE = 12;
+const EXPERIENCE_PER_TICK = 0.2;
+const EXPERIENCE_PER_FOOD = 2;
+const EXPERIENCE_PER_KILL = 100;
+const EXPERIENCE_PER_BIRTH = 20;
 
 // ---- МУТАЦИИ ----
-const MUTATION_CHANCE = 0.15;
-const MUTATION_STRENGTH_RANGE = 0.15;
-const MUTATION_HP_RANGE = 0.15;
-const MUTATION_SPEED_RANGE = 0.15;
-const MUTATION_VISION_RANGE = 0.2;
+const MUTATION_CHANCE = 0.18;
+const MUTATION_STRENGTH_RANGE = 0.18;
+const MUTATION_HP_RANGE = 0.18;
+const MUTATION_SPEED_RANGE = 0.18;
+const MUTATION_VISION_RANGE = 0.25;
 
 // ---- САМОПИНГ ----
 const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'https://cytophage.onrender.com';
@@ -250,7 +250,7 @@ function calculateStrength(ageYears, mutation = 1) {
 }
 
 function calculateDamage(strength) {
-  const bonus = Math.floor(strength / 20);
+  const bonus = Math.floor(strength / 25);
   return randInt(MIN_DAMAGE, MAX_DAMAGE) + bonus;
 }
 
@@ -261,8 +261,8 @@ function calculateMaxInventory(clanSize, leaderAge) {
 }
 
 // ---- РАСЧЕТ РАДИУСА КЛАНА ----
-function computeClanRadius(memberCount, leaderSizePoints = 20) {
-  const leaderGrowthFactor = Math.max(0, Math.min(1, (leaderSizePoints - 20) / (MAX_SIZE_POINTS - 20)));
+function computeClanRadius(memberCount, leaderSizePoints = 30) {
+  const leaderGrowthFactor = Math.max(0, Math.min(1, (leaderSizePoints - 30) / (MAX_SIZE_POINTS - 30)));
   const baseRadius = CLAN_RADIUS_MIN + leaderGrowthFactor * CLAN_RADIUS_LEADER_GROWTH;
   const memberBonus = Math.sqrt(Math.max(1, memberCount)) * CLAN_RADIUS_PER_SQRT_MEMBER;
   const totalRadius = baseRadius + memberBonus;
@@ -280,7 +280,7 @@ function rebuildFamilyCircles() {
       leaderId: null, 
       leaderX: 0, 
       leaderY: 0,
-      leaderSizePoints: 20,
+      leaderSizePoints: 30,
       leaderAge: 0
     };
     rec.memberCount += 1;
@@ -289,7 +289,7 @@ function rebuildFamilyCircles() {
       rec.leaderId = b.id;
       rec.leaderX = b.x;
       rec.leaderY = b.y;
-      rec.leaderSizePoints = b.sizePoints || 20;
+      rec.leaderSizePoints = b.sizePoints || 30;
       rec.leaderAge = b.ageYears || 0;
     }
     tmp.set(famId, rec);
@@ -367,7 +367,7 @@ class Cytophage {
       lifespanYears = null,
       lastBirthYear = 0,
       childrenCount = 0,
-      sizePoints = 20,
+      sizePoints = 30,
       hasBranched = false,
       hp = null,
       experience = 0,
@@ -384,11 +384,11 @@ class Cytophage {
     this.name = getRandomName();
     this.x = x;
     this.y = y;
-    this.vx = randRange(-0.05, 0.05);
-    this.vy = randRange(-0.05, 0.05);
-    this.maxSpeed = 1.2 * speedMutation;
-    this.acceleration = 0.05;
-    this.friction = 0.98;
+    this.vx = randRange(-0.08, 0.08);
+    this.vy = randRange(-0.08, 0.08);
+    this.maxSpeed = 1.5 * speedMutation;
+    this.acceleration = 0.06;
+    this.friction = 0.97;
     this.ageTicks = ageTicks;
     this.lifespanYears = lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS);
     this.lastBirthYear = lastBirthYear;
@@ -426,7 +426,7 @@ class Cytophage {
     this.sizePoints = sizePoints;
     this.maxSizePoints = MAX_SIZE_POINTS;
     this.size = 3;
-    this.visionRadius = 500 * visionMutation;
+    this.visionRadius = 600 * visionMutation;
     this.isLeader = false;
     this.hasBranched = false;
     this.isSuccessor = false;
@@ -485,11 +485,11 @@ class Cytophage {
     this.maxHp = calculateMaxHP(age, this.hpMutation);
     if (this.hp > this.maxHp) this.hp = this.maxHp;
     this.strength = calculateStrength(age, this.strengthMutation);
-    this.intelligence = BASE_INTELLIGENCE + Math.floor(this.experience / 100);
+    this.intelligence = BASE_INTELLIGENCE + Math.floor(this.experience / 120);
     
-    if (this.totalFood > 50) this.learnedSkills.hunting = Math.min(10, Math.floor(this.totalFood / 50));
-    if (this.totalKills > 5) this.learnedSkills.combat = Math.min(10, Math.floor(this.totalKills / 5));
-    if (age > 20) this.learnedSkills.survival = Math.min(10, Math.floor(age / 20));
+    if (this.totalFood > 60) this.learnedSkills.hunting = Math.min(10, Math.floor(this.totalFood / 60));
+    if (this.totalKills > 8) this.learnedSkills.combat = Math.min(10, Math.floor(this.totalKills / 8));
+    if (age > 25) this.learnedSkills.survival = Math.min(10, Math.floor(age / 25));
   }
 }
 
@@ -553,7 +553,7 @@ function loadState() {
         lifespanYears: b.lifespanYears ?? randRange(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS),
         lastBirthYear: b.lastBirthYear ?? 0,
         childrenCount: b.childrenCount ?? 0,
-        sizePoints: b.sizePoints ?? 20,
+        sizePoints: b.sizePoints ?? 30,
         hasBranched: b.hasBranched ?? false,
         hp: b.hp ?? null,
         experience: b.experience ?? 0,
@@ -772,12 +772,12 @@ function maybeBranchAdult(b) {
     const dx = b.x - oldCircle.leaderX;
     const dy = b.y - oldCircle.leaderY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const pushDist = oldCircle.radius + 50;
+    const pushDist = oldCircle.radius + 80;
     b.x = oldCircle.leaderX + (dx / dist) * pushDist;
     b.y = oldCircle.leaderY + (dy / dist) * pushDist;
     
-    b.vx = (dx / dist) * 3;
-    b.vy = (dy / dist) * 3;
+    b.vx = (dx / dist) * 4;
+    b.vy = (dy / dist) * 4;
   }
   
   b.familyId = fam.familyId;
@@ -861,7 +861,7 @@ function handleCombat() {
     }
     
     if (!leader.isAggressive && leader.ageYears - leader.lastAggressionYear > AGGRESSION_COOLDOWN_YEARS) {
-      const hungerFactor = leader.hunger < 30 ? 2 : 1;
+      const hungerFactor = leader.hunger < 35 ? 2.5 : 1;
       const chance = AGGRESSION_CHANCE * hungerFactor;
       
       if (Math.random() < chance) {
@@ -905,7 +905,7 @@ function handleCombat() {
       if (!isAggressiveSituation) continue;
       
       const distToEnemy = Math.sqrt(distanceSq(b.x, b.y, enemy.x, enemy.y));
-      const attackRange = (b.size + enemy.size) * 3;
+      const attackRange = (b.size + enemy.size) * 4;
       
       if (distToEnemy > attackRange) continue;
       
@@ -923,7 +923,7 @@ function handleCombat() {
   }
 }
 
-// ---- ФИЗИКА СТОЛКНОВЕНИЙ (ИСПРАВЛЕНО) ----
+// ---- УЛУЧШЕННАЯ ФИЗИКА СТОЛКНОВЕНИЙ ----
 function handleCollisions(b) {
   let collisionX = 0;
   let collisionY = 0;
@@ -938,11 +938,11 @@ function handleCollisions(b) {
 
     const dist = Math.sqrt(distSq);
     const minDist = b.size + other.size + 1;
-    const collisionRadius = minDist * 2;
+    const collisionRadius = minDist * 2.5;
 
     if (dist < collisionRadius && dist > 0.01) {
       const overlap = collisionRadius - dist;
-      const strength = (1 / Math.pow(dist, 1.2)) * overlap * 8;
+      const strength = (1 / Math.pow(dist, 1.3)) * overlap * 10;
       
       const nx = dx / dist;
       const ny = dy / dist;
@@ -963,7 +963,7 @@ function handleCollisions(b) {
     }
   }
 
-  const collisionStrength = 0.12;
+  const collisionStrength = 0.15;
   b.vx += collisionX * collisionStrength;
   b.vy += collisionY * collisionStrength;
 }
@@ -994,8 +994,8 @@ function enforceClanWalls() {
           
           const outward = b.vx * ux + b.vy * uy;
           if (outward < 0) {
-            b.vx -= outward * ux * 1.5;
-            b.vy -= outward * uy * 1.5;
+            b.vx -= outward * ux * 2;
+            b.vy -= outward * uy * 2;
           }
         }
       }
@@ -1010,14 +1010,14 @@ function enforceClanWalls() {
     const dx = b.x - rec.leaderX;
     const dy = b.y - rec.leaderY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
+    const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 30);
 
     const softZone = strictWall ? CLAN_EDGE_HARD_WALL : CLAN_EDGE_SOFT_ZONE;
     
     if (dist > r * softZone && dist <= r) {
       const ux = dx / dist;
       const uy = dy / dist;
-      const pullStrength = strictWall ? CLAN_EDGE_PULL * 3 : CLAN_EDGE_PULL;
+      const pullStrength = strictWall ? CLAN_EDGE_PULL * 4 : CLAN_EDGE_PULL;
       b.vx -= ux * pullStrength;
       b.vy -= uy * pullStrength;
     }
@@ -1031,11 +1031,11 @@ function enforceClanWalls() {
 
     const outward = b.vx * ux + b.vy * uy;
     if (outward > 0) {
-      b.vx -= outward * ux;
-      b.vy -= outward * uy;
+      b.vx -= outward * ux * 1.2;
+      b.vy -= outward * uy * 1.2;
     }
-    b.vx *= 0.9;
-    b.vy *= 0.9;
+    b.vx *= 0.85;
+    b.vy *= 0.85;
   }
 }
 
@@ -1047,7 +1047,7 @@ function feedFamilyFromLeader(leader) {
   const rec = getFamilyCircle(leader.familyId);
   if (!rec || rec.leaderId == null) return;
   
-  const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
+  const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 30);
   const rSq = r * r;
 
   // Собираем ВСЕХ голодных членов клана в радиусе
@@ -1059,8 +1059,8 @@ function feedFamilyFromLeader(leader) {
     const dSq = distanceSq(other.x, other.y, rec.leaderX, rec.leaderY);
     if (dSq > rSq) continue;
     
-    // Кормим если голод меньше 80%
-    if (other.hunger < other.maxHunger * 0.8) {
+    // Кормим если голод меньше 75%
+    if (other.hunger < other.maxHunger * 0.75) {
       hungryMembers.push(other);
     }
   }
@@ -1142,7 +1142,7 @@ function findBestTargetFor(b) {
   
   const visionRadiusSq = b.visionRadius * b.visionRadius;
   const hpRatio = b.hp / b.maxHp;
-  const needsHealthUrgently = hpRatio < 0.3;
+  const needsHealthUrgently = hpRatio < 0.35;
   
   let bestTarget = null;
   let bestScore = Infinity;
@@ -1154,7 +1154,7 @@ function findBestTargetFor(b) {
       if (distSq > visionRadiusSq) continue;
       const dist = Math.sqrt(distSq);
       
-      const score = dist * 0.5;
+      const score = dist * 0.3;
       if (score < bestScore) {
         bestScore = score;
         bestTarget = hf;
@@ -1175,7 +1175,7 @@ function findBestTargetFor(b) {
         if (other.familyId !== b.familyId) continue;
         const odSq = distanceSq(other.x, other.y, food.x, food.y);
         const od = Math.sqrt(odSq) || 1;
-        familyBonus += 50 / od;
+        familyBonus += 60 / od;
       }
 
       const score = dist - familyBonus;
@@ -1190,7 +1190,7 @@ function findBestTargetFor(b) {
   if (bestTarget && targetType === 'health' && b.isLeader) {
     for (const food of foodArray) {
       const distToFood = Math.sqrt(distanceSq(b.x, b.y, food.x, food.y));
-      if (distToFood < b.size * 3) {
+      if (distToFood < b.size * 4) {
         return { target: food, type: 'food' };
       }
     }
@@ -1214,7 +1214,7 @@ function maybeReproduce(b, newChildren) {
     if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
     if (b.childrenCount > 0 && ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
-    const offset = 20;
+    const offset = 25;
     const childX = b.x + randRange(-offset, offset);
     const childY = b.y + randRange(-offset, offset);
 
@@ -1263,13 +1263,13 @@ function updateBacteria() {
       let hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
       
       if (ageYears < 5) {
-        hungerDrain *= 0.3;  // Дети теряют только 30%
+        hungerDrain *= 0.25;  // Дети теряют только 25%
       } else if (ageYears < 10) {
-        hungerDrain *= 0.6;  // Молодые 60%
+        hungerDrain *= 0.5;  // Молодые 50%
       }
       
-      if (b.isLeader) hungerDrain *= 1.5;
-      if (ageYears > 40) hungerDrain *= 1 + ((ageYears - 40) / 100);
+      if (b.isLeader) hungerDrain *= 1.8;
+      if (ageYears > 40) hungerDrain *= 1 + ((ageYears - 40) / 80);
       
       b.hunger -= hungerDrain;
       if (b.hunger < 0) b.hunger = 0;
@@ -1314,8 +1314,8 @@ function updateBacteria() {
         b.vx += (desiredVx - b.vx) * b.acceleration;
         b.vy += (desiredVy - b.vy) * b.acceleration;
       } else {
-        b.vx += (Math.random() - 0.5) * 0.08;
-        b.vy += (Math.random() - 0.5) * 0.08;
+        b.vx += (Math.random() - 0.5) * 0.1;
+        b.vy += (Math.random() - 0.5) * 0.1;
       }
 
       b.vx *= b.friction;
@@ -1332,23 +1332,23 @@ function updateBacteria() {
 
       if (b.x < 0) {
         b.x = 0;
-        b.vx = Math.abs(b.vx) * 0.5;
+        b.vx = Math.abs(b.vx) * 0.6;
       } else if (b.x > world.width) {
         b.x = world.width;
-        b.vx = -Math.abs(b.vx) * 0.5;
+        b.vx = -Math.abs(b.vx) * 0.6;
       }
 
       if (b.y < 0) {
         b.y = 0;
-        b.vy = Math.abs(b.vy) * 0.5;
+        b.vy = Math.abs(b.vy) * 0.6;
       } else if (b.y > world.height) {
         b.y = world.height;
-        b.vy = -Math.abs(b.vy) * 0.5;
+        b.vy = -Math.abs(b.vy) * 0.6;
       }
 
       const youthFactor = Math.min(1, ageYears / ADULT_AGE_YEARS);
       const foodFactor = Math.min(1, (b.sizePoints || 0) / b.maxSizePoints);
-      const baseSize = 4 + youthFactor * 8 + foodFactor * 12;
+      const baseSize = 5 + youthFactor * 10 + foodFactor * 15;
       b.size = baseSize;
     } catch (err) {
       console.error(`❌ Error processing bacteria ${b.id}:`, err);
@@ -1374,7 +1374,7 @@ function handleEating() {
     for (const f of foodArray) {
       if (eatenFoodIds.has(f.id)) continue;
       const distSq = distanceSq(b.x, b.y, f.x, f.y);
-      const eatRadius = b.size * 1.3;
+      const eatRadius = b.size * 1.5;
       if (distSq < eatRadius * eatRadius) {
         eatenFoodIds.add(f.id);
         
@@ -1386,12 +1386,12 @@ function handleEating() {
         b.totalFood++;
         b.experience += EXPERIENCE_PER_FOOD;
         
-        // Члены клана собирают еду в инвентарь лидера когда сыты > 60%
+        // Члены клана собирают еду в инвентарь лидера когда сыты > 65%
         if (!b.isLeader) {
           const leader = bacteriaArray.find(l => l.isLeader && l.familyId === b.familyId);
           if (leader) {
             const hungerRatio = b.hunger / b.maxHunger;
-            if (hungerRatio > 0.6) {
+            if (hungerRatio > 0.65) {
               const foodWeight = 1;
               if (leader.inventory < leader.maxInventory) {
                 leader.inventory += foodWeight;
@@ -1406,7 +1406,7 @@ function handleEating() {
     for (const hf of healthFoodArray) {
       if (eatenHealthFoodIds.has(hf.id)) continue;
       const distSq = distanceSq(b.x, b.y, hf.x, hf.y);
-      const eatRadius = b.size * 1.3;
+      const eatRadius = b.size * 1.5;
       if (distSq < eatRadius * eatRadius) {
         eatenHealthFoodIds.add(hf.id);
         
@@ -1439,14 +1439,14 @@ function leaderEatFromInventory() {
   for (const b of bacteriaArray) {
     if (!b.isLeader) continue;
     
-    // Лидер ест когда голод < 50%
-    if (b.hunger < b.maxHunger * 0.5 && b.inventory > 0) {
+    // Лидер ест когда голод < 30%
+    if (b.hunger < b.maxHunger * 0.30 && b.inventory > 0) {
       // Кормит весь клан!
       feedFamilyFromLeader(b);
       
       // И себя тоже кормит из остатка
-      if (b.hunger < b.maxHunger * 0.8 && b.inventory > 0) {
-        const neededHunger = b.maxHunger * 0.8 - b.hunger;
+      if (b.hunger < b.maxHunger * 0.75 && b.inventory > 0) {
+        const neededHunger = b.maxHunger * 0.75 - b.hunger;
         const foodToEat = Math.min(Math.ceil(neededHunger / FOOD_HUNGER_GAIN), b.inventory);
         
         const hungerGained = foodToEat * FOOD_HUNGER_GAIN;
@@ -1465,7 +1465,7 @@ function autoFeedClans() {
   for (const b of bacteriaArray) {
     if (!b.isLeader) continue;
     // Автоматически кормим клан если есть еда в инвентаре
-    if (b.inventory > 10) {
+    if (b.inventory > 15) {
       feedFamilyFromLeader(b);
     }
   }
@@ -1603,6 +1603,8 @@ app.listen(PORT, () => {
   console.log(`🍖 Auto-feeding system: ENABLED (EQUAL distribution)`);
   console.log(`🧬 Mutation system: ENABLED`);
   console.log(`⚔️ War system: ENABLED`);
+  console.log(`🔄 Improved collision physics: ENABLED`);
+  console.log(`📊 Advanced AI: ENABLED`);
   
   setTimeout(() => {
     console.log('🚀 Self-ping system started');
