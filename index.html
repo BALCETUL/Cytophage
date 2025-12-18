@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cytophage — Семейный мир</title>
+  <title>Cytophage — Живой мир</title>
   <style>
     html, body {
       margin: 0; padding: 0; width: 100%; height: 100%;
@@ -19,13 +19,13 @@
     #canvas:active { cursor: grabbing; }
 
     .hud {
-      position: fixed; left: 10px; top: 10px; padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.6); border-radius: 8px; font-size: 12px;
-      pointer-events: none; max-width: 420px;
+      position: fixed; left: 10px; top: 10px; padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.7); border-radius: 8px; font-size: 11px;
+      pointer-events: none; max-width: 500px; border: 1px solid rgba(46,160,67,0.3);
     }
-    .hud .row { margin-top: 3px; white-space: nowrap; }
-    .hud .row span.label { display: inline-block; min-width: 110px; color: #8b949e; }
-    .hud .row span.value { display: inline-block; min-width: 90px; }
+    .hud .row { margin-top: 4px; white-space: nowrap; }
+    .hud .row span.label { display: inline-block; min-width: 120px; color: #8b949e; }
+    .hud .row span.value { display: inline-block; min-width: 100px; color: #79c0ff; }
     .server-row { display: flex; align-items: center; }
     .server-dot {
       width: 10px; height: 10px; border-radius: 50%; margin-right: 6px;
@@ -36,51 +36,100 @@
 
     .right-container {
       position: fixed; right: 10px; top: 10px; display: flex; gap: 10px;
-      max-height: calc(100vh - 20px);
+      max-height: calc(100vh - 20px); flex-direction: column;
     }
-    .hud-right {
-      width: 280px; padding: 8px 12px; background: rgba(0, 0, 0, 0.6);
-      border-radius: 8px; font-size: 12px; max-height: 100%;
-      overflow-y: auto; pointer-events: auto;
+    
+    .hud-panel {
+      width: 320px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 11px; max-height: 45%;
+      overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
     }
-    .hud-right-title {
-      font-weight: 600; color: #79c0ff; margin-bottom: 4px;
+    
+    .hud-panel-title {
+      font-weight: 600; color: #79c0ff; margin-bottom: 6px;
       position: sticky; top: 0; background: rgba(0, 0, 0, 0.9);
-      padding-bottom: 3px; z-index: 1;
+      padding-bottom: 4px; z-index: 1; border-bottom: 1px solid rgba(46,160,67,0.2);
     }
+    
     .leader-row {
-      margin-top: 3px; border-bottom: 1px solid rgba(110,118,129,0.3);
-      padding: 3px 12px 3px 18px; cursor: pointer; position: relative;
+      margin-top: 3px; border-bottom: 1px solid rgba(110,118,129,0.2);
+      padding: 4px 10px; cursor: pointer; position: relative; border-radius: 4px;
     }
     .leader-row:last-child { border-bottom: none; }
     .leader-row:hover { background: rgba(56,139,253,0.15); }
     .row-selected { border: 1px solid #2ea043; background: rgba(46,160,67,0.25); }
+    
     .leader-main {
       display: flex; justify-content: space-between; align-items: center;
       gap: 4px; white-space: nowrap;
     }
     .leader-name { font-weight: 500; }
-    .leader-clan { color: #8b949e; margin-left: 6px; }
-    .leader-info { font-size: 11px; color: #c9d1d9; white-space: nowrap; }
+    .leader-clan { color: #8b949e; margin-left: 4px; font-size: 10px; }
+    .leader-info { font-size: 10px; color: #c9d1d9; white-space: nowrap; }
     .combat-indicator { color: #ff4444; font-weight: 600; }
 
     #selectedBacteriumDetail {
-      width: 280px; padding: 10px 12px; background: rgba(0, 0, 0, 0.6);
-      border-radius: 8px; font-size: 12px; overflow-y: auto; pointer-events: auto;
-      border: 1px solid rgba(46,160,67,0.5); display: none;
+      width: 320px; padding: 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 10px; overflow-y: auto; pointer-events: auto;
+      border: 1px solid rgba(46,160,67,0.5); display: none; max-height: 50%;
     }
-    .detail-title { font-weight: 600; color: #2ea043; margin-bottom: 4px; }
+    
+    .detail-title { font-weight: 600; color: #2ea043; margin-bottom: 6px; border-bottom: 1px solid rgba(46,160,67,0.3); padding-bottom: 4px; }
     .detail-row {
-      margin-bottom: 3px; border-bottom: 1px solid rgba(110,118,129,0.25);
-      padding-bottom: 4px;
+      margin-bottom: 3px; border-bottom: 1px solid rgba(110,118,129,0.15);
+      padding-bottom: 3px;
     }
     .detail-row .label {
-      color: #8b949e; display: inline-block; min-width: 100px;
+      color: #8b949e; display: inline-block; min-width: 110px;
+    }
+    .detail-row .value {
+      color: #79c0ff;
     }
     .skills-block {
-      margin-top: 3px;
+      margin-top: 4px;
       padding-left: 10px;
-      line-height: 1.4;
+      line-height: 1.5;
+      background: rgba(46,160,67,0.1);
+      padding: 6px;
+      border-radius: 4px;
+    }
+    .mutation-block {
+      margin-top: 4px;
+      padding: 6px;
+      background: rgba(150,100,200,0.1);
+      border-radius: 4px;
+      border-left: 2px solid #9964c8;
+    }
+    
+    .events-panel {
+      width: 320px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 9px; max-height: 35%;
+      overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
+    }
+    
+    .event-item {
+      margin-bottom: 4px; padding: 4px 6px; border-left: 2px solid #79c0ff;
+      background: rgba(121,192,255,0.05); border-radius: 2px;
+    }
+    .event-item.war { border-left-color: #ff4444; background: rgba(255,68,68,0.05); }
+    .event-item.death { border-left-color: #888; background: rgba(136,136,136,0.05); }
+    .event-item.birth { border-left-color: #2ea043; background: rgba(46,160,67,0.05); }
+    .event-item.mutation { border-left-color: #9964c8; background: rgba(153,100,200,0.05); }
+    .event-time { color: #8b949e; font-size: 8px; }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(46,160,67,0.5);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(46,160,67,0.8);
     }
   </style>
 </head>
@@ -96,16 +145,23 @@
     <div class="row" id="hudRow2"></div>
     <div class="row" id="hudRow3"></div>
     <div class="row" id="hudRow4"></div>
+    <div class="row" id="hudRow5"></div>
   </div>
 
   <div class="right-container">
     <div id="selectedBacteriumDetail">
-      <div class="detail-title">Детали выбранной бактерии</div>
+      <div class="detail-title">📊 Детали бактерии</div>
       <div id="detailContent"></div>
     </div>
-    <div class="hud-right">
-      <div class="hud-right-title">Бактерии и кланы</div>
+    
+    <div class="hud-panel">
+      <div class="hud-panel-title">👑 Лидеры и кланы</div>
       <div id="leadersList"></div>
+    </div>
+    
+    <div class="events-panel">
+      <div class="hud-panel-title">📜 События</div>
+      <div id="eventsList"></div>
     </div>
   </div>
 
@@ -119,9 +175,11 @@
     const hudRow2 = document.getElementById("hudRow2");
     const hudRow3 = document.getElementById("hudRow3");
     const hudRow4 = document.getElementById("hudRow4");
+    const hudRow5 = document.getElementById("hudRow5");
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
+    const eventsListEl = document.getElementById("eventsList");
     const detailPanel = document.getElementById("selectedBacteriumDetail");
     const detailContent = document.getElementById("detailContent");
 
@@ -156,6 +214,7 @@
     let bacteriaRaw = [];
     let foodRaw = [];
     let healthFoodRaw = [];
+    let eventsRaw = [];
     const renderPositions = new Map();
 
     let selectedBacteriumId = null;
@@ -491,37 +550,45 @@
       let maxAge = 0;
       let emperorCount = 0;
       let inCombatCount = 0;
+      let mutationCount = 0;
       for (const b of bacteriaRaw) {
         if (b.generation > maxGeneration) maxGeneration = b.generation;
         if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
         if (b.isEmperor) emperorCount++;
         if (b.isInCombat) inCombatCount++;
+        if (b.mutations && (b.mutations.strength !== 1 || b.mutations.hp !== 1)) mutationCount++;
       }
 
       const totalBorn = lastStats ? lastStats.totalBorn : 0;
       const totalDied = lastStats ? lastStats.totalDied : 0;
       const totalKills = lastStats ? lastStats.totalKills : 0;
+      const totalMutations = lastStats ? lastStats.totalMutations : 0;
+      const totalWars = lastStats ? lastStats.totalWars : 0;
       const activeClans = lastStats ? lastStats.activeClans : 0;
 
       hudRow1.innerHTML =
-        `<span class="label">Карта:</span><span class="value">${world.width}x${world.height}</span>` +
-        `<span class="label">Бактерий:</span><span class="value">${count}</span>` +
-        `<span class="label">В бою:</span><span class="value" style="color:${inCombatCount > 0 ? '#ff4444' : '#2ea043'};">${inCombatCount}</span>`;
+        `<span class="label">🗺️ Карта:</span><span class="value">${world.width}x${world.height}</span> | ` +
+        `<span class="label">🦠 Бактерий:</span><span class="value">${count}</span>`;
 
       hudRow2.innerHTML =
-        `<span class="label">Еда:</span><span class="value">${foodCount}</span>` +
-        `<span class="label">HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span>` +
-        `<span class="label">Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span>`;
+        `<span class="label">🍖 Еда:</span><span class="value">${foodCount}</span> | ` +
+        `<span class="label">❤️ HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span> | ` +
+        `<span class="label">👑 Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span>`;
 
       hudRow3.innerHTML =
-        `<span class="label">Родилось:</span><span class="value">${totalBorn}</span>` +
-        `<span class="label">Умерло:</span><span class="value">${totalDied}</span>` +
-        `<span class="label">Убийств:</span><span class="value">${totalKills}</span>`;
+        `<span class="label">✨ Родилось:</span><span class="value">${totalBorn}</span> | ` +
+        `<span class="label">💀 Умерло:</span><span class="value">${totalDied}</span> | ` +
+        `<span class="label">⚔️ Убийств:</span><span class="value">${totalKills}</span>`;
 
       hudRow4.innerHTML =
-        `<span class="label">Макс. поколение:</span><span class="value">${Math.floor(maxGeneration)}</span>` +
-        `<span class="label">Макс. возраст:</span><span class="value">${maxAge.toFixed(1)} лет</span>` +
-        `<span class="label">Императоров:</span><span class="value" style="color:#ffd700;">${emperorCount}</span>`;
+        `<span class="label">🧬 Мутаций:</span><span class="value" style="color:#9964c8;">${totalMutations}</span> | ` +
+        `<span class="label">⚔️ Войн:</span><span class="value" style="color:#ff4444;">${totalWars}</span> | ` +
+        `<span class="label">⚔️ В бою:</span><span class="value" style="color:${inCombatCount > 0 ? '#ff4444' : '#2ea043'};">${inCombatCount}</span>`;
+
+      hudRow5.innerHTML =
+        `<span class="label">📊 Поколение:</span><span class="value">${Math.floor(maxGeneration)}</span> | ` +
+        `<span class="label">📅 Макс возраст:</span><span class="value">${maxAge.toFixed(1)} лет</span> | ` +
+        `<span class="label">👑⭐ Императоров:</span><span class="value" style="color:#ffd700;">${emperorCount}</span>`;
     }
 
     function updateRightHud() {
@@ -555,7 +622,7 @@
       leaders.sort(byAgeDesc);
       successors.sort(byAgeDesc);
       others.sort(byAgeDesc);
-      const all = leaders.concat(successors).concat(others);
+      const all = leaders.concat(successors).concat(others).slice(0, 20);
 
       let html = "";
       let index = 1;
@@ -568,20 +635,41 @@
         const hp = Math.round(b.hp ?? 100);
         const maxHp = Math.round(b.maxHp ?? 100);
         const strength = Math.round(b.strength ?? 10);
+        
         html += `<div class="leader-row${selectedClass}" data-id="${b.id}">
           <div class="leader-main">
             <span class="leader-name" style="color: ${b.familyColor || "#58a6ff"};">${index}. ${b.name}${leaderMark}${combatMark}</span>
-            <span class="leader-clan">${b.familyName || ""}</span>
           </div>
           <div class="leader-info">
-            Возраст: ${ageLabel} · В клане: ${size}<br>
-            HP: ${hp}/${maxHp} · Сила: ${strength}
+            ${b.familyName} · Возраст: ${ageLabel} · В клане: ${size}<br>
+            HP: ${hp}/${maxHp} · Сила: ${strength} · Опыт: ${Math.round(b.experience)}
           </div>
         </div>`;
         index++;
       }
 
       leadersListEl.innerHTML = html;
+    }
+
+    function updateEventsPanel() {
+      if (!eventsRaw || eventsRaw.length === 0) {
+        eventsListEl.innerHTML = "<div class='event-item'>Нет событий</div>";
+        return;
+      }
+
+      let html = "";
+      const recentEvents = eventsRaw.slice(-15).reverse();
+      
+      for (const event of recentEvents) {
+        const eventClass = event.type || 'info';
+        const time = new Date(event.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        html += `<div class="event-item ${eventClass}">
+          <div>${event.message}</div>
+          <div class="event-time">${time}</div>
+        </div>`;
+      }
+
+      eventsListEl.innerHTML = html;
     }
 
     function updateDetailPanel(b) {
@@ -629,7 +717,7 @@
       const totalFood = b.totalFood ?? 0;
       
       const skills = b.learnedSkills || { hunting: 1, combat: 1, survival: 1 };
-      const skillsHtml = `<div class="skills-block">🎯 Охота: ${skills.hunting}/10<br>⚔️ Бой: ${skills.combat}/10<br>🛡️ Выживание: ${skills.survival}/10</div>`;
+      const skillsHtml = `<div class="skills-block">🎯 Охота: ${skills.hunting}/10 | ⚔️ Бой: ${skills.combat}/10 | 🛡️ Выживание: ${skills.survival}/10</div>`;
       
       const damageEstimate = `${1 + Math.floor(strength / 20)}-${5 + Math.floor(strength / 20)}`;
       
@@ -637,41 +725,53 @@
       if (isLeader) {
         const inventory = Math.round(b.inventory ?? 0);
         const maxInventory = Math.round(b.maxInventory ?? 50);
-        inventoryHtml = `<div class="detail-row"><span class="label">Инвентарь:</span> ${inventory} / ${maxInventory} шт</div>`;
+        inventoryHtml = `<div class="detail-row"><span class="label">📦 Инвентарь:</span> <span class="value">${inventory} / ${maxInventory}</span></div>`;
       }
 
       let aggressiveHtml = "";
       if (isAggressive) {
-        aggressiveHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Состояние:</span> АГРЕССИВЕН!</div>';
+        aggressiveHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Состояние:</span> <span class="value">АГРЕССИВЕН!</span></div>';
       }
 
       let combatHtml = "";
       if (isInCombat) {
-        combatHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Бой:</span> В СРАЖЕНИИ!</div>';
+        combatHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Бой:</span> <span class="value">В СРАЖЕНИИ!</span></div>';
+      }
+
+      const mutations = b.mutations || { strength: 1, hp: 1, speed: 1, vision: 1 };
+      const hasMutations = mutations.strength !== 1 || mutations.hp !== 1 || mutations.speed !== 1 || mutations.vision !== 1;
+      let mutationHtml = "";
+      if (hasMutations) {
+        mutationHtml = `<div class="mutation-block">
+          🧬 <strong>Мутации:</strong><br>
+          Сила: ${mutations.strength.toFixed(2)}x | HP: ${mutations.hp.toFixed(2)}x<br>
+          Скорость: ${mutations.speed.toFixed(2)}x | Зрение: ${mutations.vision.toFixed(2)}x
+        </div>`;
       }
 
       detailContent.innerHTML = `
-        <div class="detail-row"><span class="label">Имя:</span> <span style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
+        <div class="detail-row"><span class="label">Имя:</span> <span class="value" style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
         <div class="detail-row"><span class="label">Статус:</span> ${statusHtml}</div>
         ${aggressiveHtml}
         ${combatHtml}
-        <div class="detail-row"><span class="label">Клан:</span> <span style="color:${clanColor};">${clanName}${b.familyId ? ` (ID: ${b.familyId})` : ""}</span></div>
-        <div class="detail-row"><span class="label">Радиус клана:</span> ${clanRadius}</div>
-        <div class="detail-row" style="border-top: 2px solid #2ea043; margin-top:5px; padding-top:5px;"><span class="label">❤️ HP:</span> ${hp} / ${maxHp}</div>
-        <div class="detail-row"><span class="label">💪 Сила:</span> ${strength}</div>
-        <div class="detail-row"><span class="label">⚔️ Урон:</span> ${damageEstimate}</div>
-        <div class="detail-row"><span class="label">🧠 Интеллект:</span> ${intelligence}</div>
-        <div class="detail-row"><span class="label">⭐ Опыт:</span> ${experience}</div>
+        <div class="detail-row"><span class="label">Клан:</span> <span class="value" style="color:${clanColor};">${clanName}</span></div>
+        <div class="detail-row"><span class="label">Радиус клана:</span> <span class="value">${clanRadius}</span></div>
+        <div class="detail-row" style="border-top: 1px solid #2ea043; margin-top:4px; padding-top:4px;"><span class="label">❤️ HP:</span> <span class="value">${hp} / ${maxHp}</span></div>
+        <div class="detail-row"><span class="label">💪 Сила:</span> <span class="value">${strength}</span></div>
+        <div class="detail-row"><span class="label">⚔️ Урон:</span> <span class="value">${damageEstimate}</span></div>
+        <div class="detail-row"><span class="label">🧠 Интеллект:</span> <span class="value">${intelligence}</span></div>
+        <div class="detail-row"><span class="label">⭐ Опыт:</span> <span class="value">${experience}</span></div>
         <div class="detail-row"><span class="label">📚 Навыки:</span>${skillsHtml}</div>
-        <div class="detail-row" style="border-top: 2px solid #2ea043; margin-top:5px; padding-top:5px;"><span class="label">Возраст:</span> ${ageLabel} (${ageYears.toFixed(2)} лет)</div>
-        <div class="detail-row"><span class="label">Поколение:</span> ${Math.floor(b.generation || 0)}</div>
-        <div class="detail-row"><span class="label">Размер:</span> ${Math.round(sizePoints)}/${maxSizePoints}</div>
-        <div class="detail-row"><span class="label">🍖 Голод:</span> ${hunger}/${maxHunger}</div>
+        ${mutationHtml}
+        <div class="detail-row" style="border-top: 1px solid #2ea043; margin-top:4px; padding-top:4px;"><span class="label">Возраст:</span> <span class="value">${ageLabel} (${ageYears.toFixed(2)} лет)</span></div>
+        <div class="detail-row"><span class="label">Поколение:</span> <span class="value">${Math.floor(b.generation || 0)}</span></div>
+        <div class="detail-row"><span class="label">Размер:</span> <span class="value">${Math.round(sizePoints)}/${maxSizePoints}</span></div>
+        <div class="detail-row"><span class="label">🍖 Голод:</span> <span class="value">${hunger}/${maxHunger}</span></div>
         ${inventoryHtml}
-        <div class="detail-row"><span class="label">Убийств:</span> ${totalKills}</div>
-        <div class="detail-row"><span class="label">Еды собрано:</span> ${totalFood}</div>
-        <div class="detail-row"><span class="label">Потомки:</span> Живы ${childrenAlive} - Умерли ${childrenDead}</div>
-        <div class="detail-row"><span class="label">Координаты:</span> X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</div>
+        <div class="detail-row"><span class="label">⚔️ Убийств:</span> <span class="value">${totalKills}</span></div>
+        <div class="detail-row"><span class="label">🍖 Еды собрано:</span> <span class="value">${totalFood}</span></div>
+        <div class="detail-row"><span class="label">👶 Потомки:</span> <span class="value">Живы ${childrenAlive} - Умерли ${childrenDead}</span></div>
+        <div class="detail-row"><span class="label">📍 Координаты:</span> <span class="value">X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</span></div>
       `;
       detailPanel.style.display = "block";
     }
@@ -704,6 +804,7 @@
         bacteriaRaw = data.bacteria || [];
         foodRaw = data.food || [];
         healthFoodRaw = data.healthFood || [];
+        eventsRaw = data.events || [];
         lastStats = data.stats || null;
 
         if (!lastServerOk) {
@@ -721,6 +822,8 @@
         }
 
         updateLeftHud();
+        updateEventsPanel();
+        
         const now = Date.now();
         if (now - lastHudInteractionTime > 900) {
           updateRightHud();
