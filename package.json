@@ -1,7 +1,7 @@
 {
   "name": "cytophage-world-server",
-  "version": "3.0.0",
-  "description": "24/7 Cytophage world simulation - Enhanced version with mutations, wars, and evolution",
+  "version": "4.0.0",
+  "description": "24/7 Cytophage world simulation - Advanced version with improved physics, AI, and evolution",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,9 @@
     "game",
     "world",
     "mutations",
-    "wars"
+    "wars",
+    "ai",
+    "physics"
   ],
   "author": "Cytophage Team",
   "license": "MIT",
