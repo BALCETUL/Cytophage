@@ -345,7 +345,6 @@ class Cytophage {
     this.childrenCount = childrenCount;
     this.bornAt = new Date().toISOString();
 
-    // FIX: Убедимся что у каждой бактерии ВСЕГДА есть familyId
     if (familyId && familyColor && familyName) {
       this.familyId = familyId;
       this.familyColor = familyColor;
@@ -357,14 +356,12 @@ class Cytophage {
         this.familyColor = fam.familyColor;
         this.familyName = fam.familyName;
       } else {
-        // FIX: Если лимит достигнут, присоединяемся к случайному клану
         const randomBact = bacteriaArray[randInt(0, bacteriaArray.length - 1)];
         if (randomBact && randomBact.familyId) {
           this.familyId = randomBact.familyId;
           this.familyColor = randomBact.familyColor;
           this.familyName = randomBact.familyName;
         } else {
-          // FIX: В крайнем случае создаем клан 0 (это не должно произойти)
           this.familyId = 0;
           this.familyColor = "#FFFFFF";
           this.familyName = "Нейтральные";
@@ -698,7 +695,6 @@ function maybeBranchAdult(b) {
   if (!isMaxSize(b)) return;
   if (b.hasBranched) return;
   
-  // Если лимит кланов достигнут - остаёмся в своём клане
   if (getActiveClanCount() >= MAX_CLANS) {
     return;
   }
@@ -759,16 +755,14 @@ function maybeSelectSuccessor(leader) {
   console.log(`⭐ ${leader.name} выбрал преемником ${successor.name}`);
 }
 
-// ---- СИСТЕМА БОЕВ (ИСПРАВЛЕННАЯ) ----
+// ---- СИСТЕМА БОЕВ ----
 function handleCombat() {
   const activeClanCount = getActiveClanCount();
   
-  // Сброс состояния боя
   for (const b of bacteriaArray) {
     b.isInCombat = false;
   }
   
-  // Определяем пересечения кругов
   const circlesInCombat = new Set();
   for (const circle1 of familyCircles.values()) {
     for (const circle2 of familyCircles.values()) {
@@ -780,14 +774,12 @@ function handleCombat() {
     }
   }
   
-  // Помечаем всех членов кланов в бою
   for (const b of bacteriaArray) {
     if (circlesInCombat.has(b.familyId)) {
       b.isInCombat = true;
     }
   }
   
-  // Агрессия лидеров
   for (const leader of bacteriaArray) {
     if (!leader.isLeader) continue;
     
@@ -810,7 +802,6 @@ function handleCombat() {
     }
   }
   
-  // Битвы при пересечении кругов
   for (const b of bacteriaArray) {
     if (b.hp <= 0) continue;
     if (!b.isInCombat) continue;
@@ -820,11 +811,8 @@ function handleCombat() {
     
     for (const enemy of bacteriaArray) {
       if (enemy === b) continue;
-      
-      // FIX: КРИТИЧЕСКАЯ ЗАЩИТА - проверяем familyId СТРОГО и РАНО
       if (!enemy.familyId || !b.familyId) continue;
       if (enemy.familyId === b.familyId) continue;
-      
       if (enemy.hp <= 0) continue;
       
       const enemyCircle = getFamilyCircle(enemy.familyId);
@@ -844,7 +832,6 @@ function handleCombat() {
       
       if (distToEnemy > attackRange) continue;
       
-      // АТАКА!
       const damage = calculateDamage(b.strength);
       enemy.hp -= damage;
       
@@ -859,7 +846,7 @@ function handleCombat() {
   }
 }
 
-// ---- ФИЗИКА СТОЛКНОВЕНИЙ (ДЛЯ ВСЕХ) ----
+// ---- ФИЗИКА СТОЛКНОВЕНИЙ ----
 function handleCollisions(b) {
   let collisionX = 0;
   let collisionY = 0;
@@ -969,7 +956,7 @@ function enforceClanWalls() {
   }
 }
 
-// ---- УЛУЧШЕННАЯ СИСТЕМА КОРМЛЕНИЯ КЛАНА ОТ ЛИДЕРА ----
+// ---- ИСПРАВЛЕННАЯ СИСТЕМА КОРМЛЕНИЯ: ЛИДЕР КОРМИТ ВСЕХ СРАЗУ ОДИНАКОВО ----
 function feedFamilyFromLeader(leader) {
   if (!leader.isLeader) return;
   if (leader.inventory <= 0) return;
@@ -980,7 +967,7 @@ function feedFamilyFromLeader(leader) {
   const r = rec.radius || computeClanRadius(rec.memberCount || 1, rec.leaderSizePoints || 20);
   const rSq = r * r;
 
-  // Собираем всех членов клана, которым нужна еда
+  // Собираем ВСЕХ голодных членов клана в радиусе
   const hungryMembers = [];
   for (const other of bacteriaArray) {
     if (other.familyId !== leader.familyId) continue;
@@ -989,22 +976,45 @@ function feedFamilyFromLeader(leader) {
     const dSq = distanceSq(other.x, other.y, rec.leaderX, rec.leaderY);
     if (dSq > rSq) continue;
     
-    // Только если голод ниже 70%
-    if (other.hunger < other.maxHunger * 0.7) {
+    // Кормим если голод меньше 80%
+    if (other.hunger < other.maxHunger * 0.8) {
       hungryMembers.push(other);
     }
   }
 
   if (hungryMembers.length === 0) return;
 
-  // Равномерно распределяем еду из инвентаря
-  const foodPerMember = Math.min(
-    Math.floor(leader.inventory / hungryMembers.length),
-    10  // Максимум 10 единиц еды за раз на одного члена
-  );
+  // ИСПРАВЛЕНИЕ: Делим еду ПОРОВНУ между ВСЕМИ голодными
+  const foodPerMember = Math.floor(leader.inventory / hungryMembers.length);
   
+  // Если еды недостаточно даже по 1 на каждого - даём хоть что-то
+  if (foodPerMember <= 0 && leader.inventory > 0) {
+    // Даём по 1 еде первым N членам
+    let totalFoodUsed = 0;
+    for (let i = 0; i < Math.min(hungryMembers.length, leader.inventory); i++) {
+      const member = hungryMembers[i];
+      const hungerGain = 1 * FOOD_HUNGER_GAIN;
+      const sizeGain = 1 * SIZE_GAIN_PER_FOOD;
+      
+      member.hunger += hungerGain;
+      if (member.hunger > member.maxHunger) member.hunger = member.maxHunger;
+      
+      member.sizePoints = (member.sizePoints || 0) + sizeGain;
+      if (member.sizePoints > member.maxSizePoints) member.sizePoints = member.maxSizePoints;
+      
+      totalFoodUsed += 1;
+    }
+    
+    leader.inventory -= totalFoodUsed;
+    if (leader.inventory < 0) leader.inventory = 0;
+    
+    console.log(`🍖 Лидер ${leader.name} (${leader.familyName}) накормил ${totalFoodUsed} членов клана по 1 еде (осталось: ${leader.inventory})`);
+    return;
+  }
+
   if (foodPerMember <= 0) return;
 
+  // КОРМИМ ВСЕХ ОДИНАКОВО!
   let totalFoodUsed = 0;
   for (const member of hungryMembers) {
     const hungerGain = foodPerMember * FOOD_HUNGER_GAIN;
@@ -1021,15 +1031,12 @@ function feedFamilyFromLeader(leader) {
 
   leader.inventory -= totalFoodUsed;
   if (leader.inventory < 0) leader.inventory = 0;
-  
-  if (totalFoodUsed > 0) {
-    console.log(`🍖 Лидер ${leader.name} (${leader.familyName}) накормил ${hungryMembers.length} членов клана, использовано ${totalFoodUsed} еды из инвентаря (осталось: ${leader.inventory})`);
-  }
+
+  console.log(`🍖 Лидер ${leader.name} (${leader.familyName}) накормил ВСЕХ ${hungryMembers.length} членов клана по ${foodPerMember} еды каждому (использовано: ${totalFoodUsed}, осталось: ${leader.inventory})`);
 }
 
 // ---- ПОИСК ЕДЫ / HEALTH FOOD / ВРАГОВ ----
 function findBestTargetFor(b) {
-  // В бою - ищем врагов
   if (b.isInCombat) {
     const myCircle = getFamilyCircle(b.familyId);
     if (myCircle) {
@@ -1038,7 +1045,6 @@ function findBestTargetFor(b) {
       
       for (const enemy of bacteriaArray) {
         if (enemy === b) continue;
-        // FIX: Проверка на членов своего клана
         if (enemy.familyId === b.familyId) continue;
         if (enemy.hp <= 0) continue;
         
@@ -1056,7 +1062,6 @@ function findBestTargetFor(b) {
   }
   
   const visionRadiusSq = b.visionRadius * b.visionRadius;
-  
   const hpRatio = b.hp / b.maxHp;
   const needsHealthUrgently = hpRatio < 0.3;
   
@@ -1115,13 +1120,12 @@ function findBestTargetFor(b) {
   return bestTarget ? { target: bestTarget, type: targetType } : null;
 }
 
-// ---- РАЗМНОЖЕНИЕ (ТОЛЬКО ЛИДЕРЫ) ----
+// ---- РАЗМНОЖЕНИЕ ----
 function maybeReproduce(b, newChildren) {
   try {
     if (!b.isLeader) return;
     
     const ageYears = b.ageYears;
-
     if (ageYears < REPRO_MIN_AGE_YEARS) return;
     
     const currentSize = b.sizePoints || 0;
@@ -1129,21 +1133,19 @@ function maybeReproduce(b, newChildren) {
     if (currentSize < maxSize) return;
     
     if (b.hunger < MIN_HUNGER_TO_REPRODUCE) return;
-    
     if (b.childrenCount > 0 && ageYears - b.lastBirthYear < BIRTH_COOLDOWN_YEARS) return;
 
     const offset = 20;
     const childX = b.x + randRange(-offset, offset);
     const childY = b.y + randRange(-offset, offset);
 
-    // FIX: Новорожденные получают ПОЛНЫЙ голод
     const child = new Cytophage(childX, childY, {
       generation: b.generation + 1,
       parentId: b.id,
       familyId: b.familyId,
       familyColor: b.familyColor,
       familyName: b.familyName,
-      hunger: MAX_HUNGER,  // Полный голод при рождении
+      hunger: MAX_HUNGER,
       lastBirthYear: 0,
       sizePoints: CHILD_START_SIZE
     });
@@ -1175,12 +1177,13 @@ function updateBacteria() {
       b.updateStats();
       b.experience += EXPERIENCE_PER_TICK;
 
-      // FIX: Снижаем потерю голода для молодых бактерий
+      // Снижаем потерю голода для молодых
       let hungerDrain = BASE_HUNGER_DRAIN + HUNGER_DRAIN_PER_SIZE * b.size;
       
-      // Молодые бактерии теряют голод медленнее
-      if (ageYears < 1) {
-        hungerDrain *= 0.5;  // 50% от обычной потери
+      if (ageYears < 5) {
+        hungerDrain *= 0.3;  // Дети теряют только 30%
+      } else if (ageYears < 10) {
+        hungerDrain *= 0.6;  // Молодые 60%
       }
       
       if (b.isLeader) hungerDrain *= 1.5;
@@ -1215,7 +1218,6 @@ function updateBacteria() {
       }
 
       maybeReproduce(b, newChildren);
-
       handleCollisions(b);
 
       const targetInfo = findBestTargetFor(b);
@@ -1285,7 +1287,6 @@ function handleEating() {
   const eatenHealthFoodIds = new Set();
 
   for (const b of bacteriaArray) {
-    // В бою не собираем еду
     if (b.isInCombat) continue;
     
     for (const f of foodArray) {
@@ -1303,10 +1304,12 @@ function handleEating() {
         b.totalFood++;
         b.experience += EXPERIENCE_PER_FOOD;
         
+        // Члены клана собирают еду в инвентарь лидера когда сыты > 60%
         if (!b.isLeader) {
           const leader = bacteriaArray.find(l => l.isLeader && l.familyId === b.familyId);
           if (leader) {
-            if (b.hunger >= b.maxHunger && b.sizePoints >= b.maxSizePoints) {
+            const hungerRatio = b.hunger / b.maxHunger;
+            if (hungerRatio > 0.6) {
               const foodWeight = 1;
               if (leader.inventory < leader.maxInventory) {
                 leader.inventory += foodWeight;
@@ -1349,32 +1352,42 @@ function handleEating() {
   }
 }
 
-// ---- ЛИДЕР ЕСТ ИЗ ИНВЕНТАРЯ ----
+// ---- ЛИДЕР ЕСТ ИЗ ИНВЕНТАРЯ (САМ + КОРМИТ КЛАН) ----
 function leaderEatFromInventory() {
   for (const b of bacteriaArray) {
     if (!b.isLeader) continue;
     
-    if (b.hunger < 40 && b.inventory > 0) {
-      const neededHunger = 80 - b.hunger;
-      const foodToEat = Math.min(Math.ceil(neededHunger / FOOD_HUNGER_GAIN), b.inventory);
+    // Лидер ест когда голод < 50%
+    if (b.hunger < b.maxHunger * 0.5 && b.inventory > 0) {
+      // ИСПРАВЛЕНИЕ: Когда лидер ест - кормит ВЕСЬ клан!
+      feedFamilyFromLeader(b);
       
-      const hungerGained = foodToEat * FOOD_HUNGER_GAIN;
-      b.hunger += hungerGained;
-      if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
-      
-      b.inventory -= foodToEat;
-      if (b.inventory < 0) b.inventory = 0;
-      
-      console.log(`🍽️ Лидер ${b.name} (${b.familyName}) съел ${foodToEat} еды из инвентаря (осталось: ${b.inventory})`);
+      // И себя тоже кормит из остатка
+      if (b.hunger < b.maxHunger * 0.8 && b.inventory > 0) {
+        const neededHunger = b.maxHunger * 0.8 - b.hunger;
+        const foodToEat = Math.min(Math.ceil(neededHunger / FOOD_HUNGER_GAIN), b.inventory);
+        
+        const hungerGained = foodToEat * FOOD_HUNGER_GAIN;
+        b.hunger += hungerGained;
+        if (b.hunger > b.maxHunger) b.hunger = b.maxHunger;
+        
+        b.inventory -= foodToEat;
+        if (b.inventory < 0) b.inventory = 0;
+        
+        console.log(`🍽️ Лидер ${b.name} (${b.familyName}) съел ${foodToEat} еды для себя (осталось: ${b.inventory})`);
+      }
     }
   }
 }
 
-// ---- АВТОМАТИЧЕСКОЕ КОРМЛЕНИЕ КЛАНА ЛИДЕРАМИ ----
+// ---- АВТОМАТИЧЕСКОЕ КОРМЛЕНИЕ КЛАНА ----
 function autoFeedClans() {
   for (const b of bacteriaArray) {
     if (!b.isLeader) continue;
-    feedFamilyFromLeader(b);
+    // Автоматически кормим клан если есть еда в инвентаре
+    if (b.inventory > 10) {  // Если есть хотя бы 10 еды
+      feedFamilyFromLeader(b);
+    }
   }
 }
 
@@ -1397,7 +1410,7 @@ function tick() {
     enforceClanWalls();
     handleEating();
     leaderEatFromInventory();
-    autoFeedClans();  // FIX: Автоматическое кормление клана каждый тик
+    autoFeedClans();
     maintainFood();
     updateChildrenStats();
 
@@ -1488,12 +1501,12 @@ app.listen(PORT, () => {
   console.log(`✅ Cytophage world server running on port ${PORT}`);
   console.log(`🌍 Server URL: ${SERVER_URL}`);
   console.log(`🗺️ Map size: ${WORLD_WIDTH}x${WORLD_HEIGHT}`);
-  console.log(`⚔️ Combat system: ENABLED (FIXED - same clan protection)`);
+  console.log(`⚔️ Combat system: ENABLED`);
   console.log(`👑 Max clans: ${MAX_CLANS}`);
   console.log(`📦 Inventory system: ENABLED`);
   console.log(`❤️ Health food system: ENABLED`);
   console.log(`🧠 Intelligence system: ENABLED`);
-  console.log(`🍖 Auto-feeding system: ENABLED`);
+  console.log(`🍖 Auto-feeding system: ENABLED (EQUAL distribution - leader feeds ALL clan members equally)`);
   
   setTimeout(() => {
     console.log('🚀 Self-ping system started');
