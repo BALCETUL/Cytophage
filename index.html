@@ -21,28 +21,40 @@
     /* ЛЕВАЯ ЧАСТЬ */
     .left-container {
       position: fixed; left: 10px; top: 10px; display: flex; flex-direction: column;
-      gap: 10px; max-height: calc(100vh - 20px); width: 500px;
+      gap: 10px; max-height: calc(100vh - 20px); width: 550px;
     }
 
     .hud {
       padding: 10px 14px;
-      background: rgba(0, 0, 0, 0.7); border-radius: 8px; font-size: 11px;
+      background: rgba(0, 0, 0, 0.7); border-radius: 8px; font-size: 10px;
       pointer-events: none; border: 1px solid rgba(46,160,67,0.3);
-      max-height: 200px; overflow-y: auto;
+      max-height: 180px; overflow-y: auto;
     }
-    .hud .row { margin-top: 3px; white-space: nowrap; }
-    .hud .row span.label { display: inline-block; min-width: 120px; color: #8b949e; }
-    .hud .row span.value { display: inline-block; min-width: 100px; color: #79c0ff; }
-    .server-row { display: flex; align-items: center; }
+
+    .hud-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+    }
+
+    .hud-item {
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+
+    .hud-item .label { color: #8b949e; min-width: 90px; }
+    .hud-item .value { color: #79c0ff; font-weight: 500; }
+
+    .server-row { 
+      display: flex; align-items: center; gap: 6px;
+      grid-column: 1 / -1;
+    }
     .server-dot {
-      width: 10px; height: 10px; border-radius: 50%; margin-right: 6px;
+      width: 10px; height: 10px; border-radius: 50%;
       background: #6e7681; box-shadow: 0 0 4px rgba(0,0,0,0.8);
     }
     .server-ok { background: #2ea043; box-shadow: 0 0 8px rgba(46,160,67,0.9); }
     .server-bad { background: #f85149; box-shadow: 0 0 8px rgba(248,81,73,0.9); }
 
     .events-panel {
-      width: 500px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      width: 550px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
       border-radius: 8px; font-size: 9px; max-height: 250px;
       overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
     }
@@ -71,7 +83,7 @@
     
     .hud-panel {
       width: 320px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px; font-size: 11px; max-height: 45%;
+      border-radius: 8px; font-size: 11px; max-height: 50%;
       overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
     }
     
@@ -147,15 +159,60 @@
   <!-- ЛЕВАЯ ЧАСТЬ -->
   <div class="left-container">
     <div class="hud">
-      <div class="row server-row">
-        <div id="serverDot" class="server-dot"></div>
-        <div id="serverStatusText">Сервер: нет данных</div>
+      <div class="hud-grid">
+        <div class="server-row">
+          <div id="serverDot" class="server-dot"></div>
+          <div id="serverStatusText" style="color: #79c0ff;">Сервер: нет данных</div>
+        </div>
+        <div class="hud-item">
+          <span class="label">🗺️ Карта:</span>
+          <span class="value" id="hudMap">15000x15000</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🦠 Бактерий:</span>
+          <span class="value" id="hudBacteria">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🍖 Еда:</span>
+          <span class="value" id="hudFood">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">❤️ HP еда:</span>
+          <span class="value" id="hudHealthFood" style="color:#ff4444;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">👑 Кланов:</span>
+          <span class="value" id="hudClans">0/15</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">✨ Родилось:</span>
+          <span class="value" id="hudBorn">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">💀 Умерло:</span>
+          <span class="value" id="hudDied">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ Убийств:</span>
+          <span class="value" id="hudKills">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🧬 Мутаций:</span>
+          <span class="value" id="hudMutations" style="color:#9964c8;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ Войн:</span>
+          <span class="value" id="hudWars" style="color:#ff4444;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ В бою:</span>
+          <span class="value" id="hudInCombat">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">📊 Поколение:</span>
+          <span class="value" id="hudGeneration">0</span>
+        </div>
       </div>
-      <div class="row" id="hudRow1"></div>
-      <div class="row" id="hudRow2"></div>
-      <div class="row" id="hudRow3"></div>
-      <div class="row" id="hudRow4"></div>
-      <div class="row" id="hudRow5"></div>
     </div>
 
     <div class="events-panel">
@@ -183,17 +240,26 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    const hudRow1 = document.getElementById("hudRow1");
-    const hudRow2 = document.getElementById("hudRow2");
-    const hudRow3 = document.getElementById("hudRow3");
-    const hudRow4 = document.getElementById("hudRow4");
-    const hudRow5 = document.getElementById("hudRow5");
     const serverDot = document.getElementById("serverDot");
     const serverStatusText = document.getElementById("serverStatusText");
     const leadersListEl = document.getElementById("leadersList");
     const eventsListEl = document.getElementById("eventsList");
     const detailPanel = document.getElementById("selectedBacteriumDetail");
     const detailContent = document.getElementById("detailContent");
+
+    // HUD элементы
+    const hudMap = document.getElementById("hudMap");
+    const hudBacteria = document.getElementById("hudBacteria");
+    const hudFood = document.getElementById("hudFood");
+    const hudHealthFood = document.getElementById("hudHealthFood");
+    const hudClans = document.getElementById("hudClans");
+    const hudBorn = document.getElementById("hudBorn");
+    const hudDied = document.getElementById("hudDied");
+    const hudKills = document.getElementById("hudKills");
+    const hudMutations = document.getElementById("hudMutations");
+    const hudWars = document.getElementById("hudWars");
+    const hudInCombat = document.getElementById("hudInCombat");
+    const hudGeneration = document.getElementById("hudGeneration");
 
     let width = window.innerWidth;
     let height = window.innerHeight;
@@ -562,13 +628,11 @@
       let maxAge = 0;
       let emperorCount = 0;
       let inCombatCount = 0;
-      let mutationCount = 0;
       for (const b of bacteriaRaw) {
         if (b.generation > maxGeneration) maxGeneration = b.generation;
         if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
         if (b.isEmperor) emperorCount++;
         if (b.isInCombat) inCombatCount++;
-        if (b.mutations && (b.mutations.strength !== 1 || b.mutations.hp !== 1)) mutationCount++;
       }
 
       const totalBorn = lastStats ? lastStats.totalBorn : 0;
@@ -578,26 +642,20 @@
       const totalWars = lastStats ? lastStats.totalWars : 0;
       const activeClans = lastStats ? lastStats.activeClans : 0;
 
-      hudRow1.innerHTML =
-        `<span class="label">🗺️ Карта:</span><span class="value">${world.width}x${world.height}</span> | ` +
-        `<span class="label">🦠 Бактерий:</span><span class="value">${count}</span>`;
-
-      hudRow2.innerHTML =
-        `<span class="label">🍖 Еда:</span><span class="value">${foodCount}</span> | ` +
-        `<span class="label">❤️ HP еда:</span><span class="value" style="color:#ff4444;">${healthFoodCount}</span>`;
-
-      hudRow3.innerHTML =
-        `<span class="label">👑 Кланов:</span><span class="value" style="color:${activeClans >= 15 ? '#ff4444' : '#2ea043'};">${activeClans}/15</span> | ` +
-        `<span class="label">✨ Родилось:</span><span class="value">${totalBorn}</span>`;
-
-      hudRow4.innerHTML =
-        `<span class="label">💀 Умерло:</span><span class="value">${totalDied}</span> | ` +
-        `<span class="label">⚔️ Убийств:</span><span class="value">${totalKills}</span>`;
-
-      hudRow5.innerHTML =
-        `<span class="label">🧬 Мутаций:</span><span class="value" style="color:#9964c8;">${totalMutations}</span> | ` +
-        `<span class="label">⚔️ Войн:</span><span class="value" style="color:#ff4444;">${totalWars}</span> | ` +
-        `<span class="label">⚔️ В бою:</span><span class="value" style="color:${inCombatCount > 0 ? '#ff4444' : '#2ea043'};">${inCombatCount}</span>`;
+      hudMap.textContent = `${world.width}x${world.height}`;
+      hudBacteria.textContent = count;
+      hudFood.textContent = foodCount;
+      hudHealthFood.textContent = healthFoodCount;
+      hudClans.textContent = `${activeClans}/15`;
+      hudClans.style.color = activeClans >= 15 ? '#ff4444' : '#79c0ff';
+      hudBorn.textContent = totalBorn;
+      hudDied.textContent = totalDied;
+      hudKills.textContent = totalKills;
+      hudMutations.textContent = totalMutations;
+      hudWars.textContent = totalWars;
+      hudInCombat.textContent = inCombatCount;
+      hudInCombat.style.color = inCombatCount > 0 ? '#ff4444' : '#79c0ff';
+      hudGeneration.textContent = Math.floor(maxGeneration);
     }
 
     function updateRightHud() {
