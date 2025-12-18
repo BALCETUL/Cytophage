@@ -18,17 +18,18 @@
     }
     #canvas:active { cursor: grabbing; }
 
-    /* ЛЕВАЯ ЧАСТЬ */
+    /* ЛЕВАЯ ЧАСТЬ - ОСНОВНАЯ */
     .left-container {
       position: fixed; left: 10px; top: 10px; display: flex; flex-direction: column;
-      gap: 10px; max-height: calc(100vh - 20px); width: 550px;
+      gap: 10px; max-height: calc(100vh - 20px); width: 580px;
+      overflow-y: auto;
     }
 
     .hud {
       padding: 10px 14px;
       background: rgba(0, 0, 0, 0.7); border-radius: 8px; font-size: 10px;
       pointer-events: none; border: 1px solid rgba(46,160,67,0.3);
-      max-height: 180px; overflow-y: auto;
+      max-height: 160px; overflow-y: auto;
     }
 
     .hud-grid {
@@ -54,8 +55,8 @@
     .server-bad { background: #f85149; box-shadow: 0 0 8px rgba(248,81,73,0.9); }
 
     .events-panel {
-      width: 550px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px; font-size: 9px; max-height: 250px;
+      width: 580px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 9px; max-height: 200px;
       overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
     }
     
@@ -73,7 +74,75 @@
     .event-item.death { border-left-color: #888; background: rgba(136,136,136,0.05); }
     .event-item.birth { border-left-color: #2ea043; background: rgba(46,160,67,0.05); }
     .event-item.mutation { border-left-color: #9964c8; background: rgba(153,100,200,0.05); }
+    .event-item.kill { border-left-color: #ff6b6b; background: rgba(255,107,107,0.05); }
     .event-time { color: #8b949e; font-size: 8px; }
+
+    /* ПАНЕЛЬ ДЕТАЛЕЙ БАКТЕРИИ - ЛЕВАЯ ЧАСТЬ */
+    #selectedBacteriumDetail {
+      width: 580px; padding: 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 10px; overflow-y: auto; pointer-events: auto;
+      border: 2px solid rgba(46,160,67,0.5); display: none; max-height: 350px;
+    }
+    
+    .detail-title { 
+      font-weight: 600; color: #2ea043; margin-bottom: 8px; 
+      border-bottom: 2px solid rgba(46,160,67,0.3); padding-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .detail-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+    }
+
+    .detail-row {
+      margin-bottom: 2px; padding-bottom: 2px;
+    }
+    .detail-row .label {
+      color: #8b949e; display: inline-block; min-width: 100px; font-size: 9px;
+    }
+    .detail-row .value {
+      color: #79c0ff; font-weight: 500;
+    }
+
+    .detail-full-width {
+      grid-column: 1 / -1;
+    }
+
+    .skills-block {
+      margin-top: 6px;
+      padding: 6px;
+      background: rgba(46,160,67,0.1);
+      border-radius: 4px;
+      border-left: 2px solid #2ea043;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .mutation-block {
+      margin-top: 6px;
+      padding: 6px;
+      background: rgba(150,100,200,0.1);
+      border-radius: 4px;
+      border-left: 2px solid #9964c8;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: 600;
+      margin-right: 4px;
+      margin-bottom: 2px;
+    }
+
+    .status-leader { background: rgba(255,215,0,0.3); color: #ffd700; }
+    .status-emperor { background: rgba(255,215,0,0.5); color: #ffff00; }
+    .status-successor { background: rgba(255,215,0,0.2); color: #ffd700; }
+    .status-aggressive { background: rgba(255,68,68,0.3); color: #ff4444; }
+    .status-combat { background: rgba(255,68,68,0.2); color: #ff6b6b; }
 
     /* ПРАВАЯ ЧАСТЬ */
     .right-container {
@@ -83,7 +152,7 @@
     
     .hud-panel {
       width: 320px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px; font-size: 11px; max-height: 50%;
+      border-radius: 8px; font-size: 11px; max-height: 60%;
       overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
     }
     
@@ -103,39 +172,6 @@
     .leader-clan { color: #8b949e; margin-left: 4px; font-size: 10px; }
     .leader-info { font-size: 10px; color: #c9d1d9; white-space: nowrap; }
     .combat-indicator { color: #ff4444; font-weight: 600; }
-
-    #selectedBacteriumDetail {
-      width: 320px; padding: 12px; background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px; font-size: 10px; overflow-y: auto; pointer-events: auto;
-      border: 1px solid rgba(46,160,67,0.5); display: none; max-height: 50%;
-    }
-    
-    .detail-title { font-weight: 600; color: #2ea043; margin-bottom: 6px; border-bottom: 1px solid rgba(46,160,67,0.3); padding-bottom: 4px; }
-    .detail-row {
-      margin-bottom: 3px; border-bottom: 1px solid rgba(110,118,129,0.15);
-      padding-bottom: 3px;
-    }
-    .detail-row .label {
-      color: #8b949e; display: inline-block; min-width: 110px;
-    }
-    .detail-row .value {
-      color: #79c0ff;
-    }
-    .skills-block {
-      margin-top: 4px;
-      padding-left: 10px;
-      line-height: 1.5;
-      background: rgba(46,160,67,0.1);
-      padding: 6px;
-      border-radius: 4px;
-    }
-    .mutation-block {
-      margin-top: 4px;
-      padding: 6px;
-      background: rgba(150,100,200,0.1);
-      border-radius: 4px;
-      border-left: 2px solid #9964c8;
-    }
 
     ::-webkit-scrollbar {
       width: 6px;
@@ -215,6 +251,11 @@
       </div>
     </div>
 
+    <div id="selectedBacteriumDetail">
+      <div class="detail-title">📊 Детали бактерии</div>
+      <div id="detailContent"></div>
+    </div>
+
     <div class="events-panel">
       <div class="hud-panel-title">📜 События</div>
       <div id="eventsList"></div>
@@ -226,11 +267,6 @@
     <div class="hud-panel">
       <div class="hud-panel-title">👑 Лидеры и кланы</div>
       <div id="leadersList"></div>
-    </div>
-    
-    <div id="selectedBacteriumDetail">
-      <div class="detail-title">📊 Детали бактерии</div>
-      <div id="detailContent"></div>
     </div>
   </div>
 
@@ -661,7 +697,6 @@
     function updateRightHud() {
       if (!bacteriaRaw || bacteriaRaw.length === 0) {
         leadersListEl.innerHTML = "<div class='leader-info'>Пока нет бактерий</div>";
-        detailPanel.style.display = "none";
         return;
       }
 
@@ -745,6 +780,7 @@
         detailContent.innerHTML = "";
         return;
       }
+
       const ageYears = b.ageYears ?? 0;
       const ageLabel = formatAgeLabel(ageYears);
       const sizePoints = b.sizePoints ?? b.size ?? 0;
@@ -760,15 +796,20 @@
       const isAggressive = !!b.isAggressive;
       const isInCombat = !!b.isInCombat;
       
-      let statusHtml;
+      let statusHtml = '';
       if (isEmperor) {
-        statusHtml = '<span style="color:#ffd700; font-weight:600;">ВЕЛИКИЙ ИМПЕРАТОР 👑⭐</span>';
+        statusHtml += '<span class="status-badge status-emperor">ВЕЛИКИЙ ИМПЕРАТОР 👑⭐</span>';
       } else if (isLeader) {
-        statusHtml = '<span style="color:#ffeb3b; font-weight:600;">ЛИДЕР ⭐</span>';
-      } else if (isSuccessor) {
-        statusHtml = '<span style="color:#ffd700; font-weight:600;">Выбран в преемники 👑</span>';
-      } else {
-        statusHtml = '<span style="color:#888;">Член клана</span>';
+        statusHtml += '<span class="status-badge status-leader">ЛИДЕР ⭐</span>';
+      }
+      if (isSuccessor) {
+        statusHtml += '<span class="status-badge status-successor">Преемник 👑</span>';
+      }
+      if (isAggressive) {
+        statusHtml += '<span class="status-badge status-aggressive">АГРЕССИВЕН ⚔️</span>';
+      }
+      if (isInCombat) {
+        statusHtml += '<span class="status-badge status-combat">В БОЮ ⚔️</span>';
       }
 
       const clanName = b.familyName || "Нет";
@@ -795,16 +836,6 @@
         inventoryHtml = `<div class="detail-row"><span class="label">📦 Инвентарь:</span> <span class="value">${inventory} / ${maxInventory}</span></div>`;
       }
 
-      let aggressiveHtml = "";
-      if (isAggressive) {
-        aggressiveHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Состояние:</span> <span class="value">АГРЕССИВЕН!</span></div>';
-      }
-
-      let combatHtml = "";
-      if (isInCombat) {
-        combatHtml = '<div class="detail-row" style="color:#ff4444;"><span class="label">⚔️ Бой:</span> <span class="value">В СРАЖЕНИИ!</span></div>';
-      }
-
       const mutations = b.mutations || { strength: 1, hp: 1, speed: 1, vision: 1 };
       const hasMutations = mutations.strength !== 1 || mutations.hp !== 1 || mutations.speed !== 1 || mutations.vision !== 1;
       let mutationHtml = "";
@@ -817,28 +848,27 @@
       }
 
       detailContent.innerHTML = `
-        <div class="detail-row"><span class="label">Имя:</span> <span class="value" style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
-        <div class="detail-row"><span class="label">Статус:</span> ${statusHtml}</div>
-        ${aggressiveHtml}
-        ${combatHtml}
-        <div class="detail-row"><span class="label">Клан:</span> <span class="value" style="color:${clanColor};">${clanName}</span></div>
-        <div class="detail-row"><span class="label">Радиус:</span> <span class="value">${clanRadius}</span></div>
-        <div class="detail-row" style="border-top: 1px solid #2ea043; margin-top:4px; padding-top:4px;"><span class="label">❤️ HP:</span> <span class="value">${hp} / ${maxHp}</span></div>
-        <div class="detail-row"><span class="label">💪 Сила:</span> <span class="value">${strength}</span></div>
-        <div class="detail-row"><span class="label">⚔️ Урон:</span> <span class="value">${damageEstimate}</span></div>
-        <div class="detail-row"><span class="label">🧠 Интеллект:</span> <span class="value">${intelligence}</span></div>
-        <div class="detail-row"><span class="label">⭐ Опыт:</span> <span class="value">${experience}</span></div>
-        <div class="detail-row"><span class="label">📚 Навыки:</span>${skillsHtml}</div>
-        ${mutationHtml}
-        <div class="detail-row" style="border-top: 1px solid #2ea043; margin-top:4px; padding-top:4px;"><span class="label">Возраст:</span> <span class="value">${ageLabel}</span></div>
-        <div class="detail-row"><span class="label">Поколение:</span> <span class="value">${Math.floor(b.generation || 0)}</span></div>
-        <div class="detail-row"><span class="label">Размер:</span> <span class="value">${Math.round(sizePoints)}/${maxSizePoints}</span></div>
-        <div class="detail-row"><span class="label">🍖 Голод:</span> <span class="value">${hunger}/${maxHunger}</span></div>
-        ${inventoryHtml}
-        <div class="detail-row"><span class="label">⚔️ Убийств:</span> <span class="value">${totalKills}</span></div>
-        <div class="detail-row"><span class="label">🍖 Еды:</span> <span class="value">${totalFood}</span></div>
-        <div class="detail-row"><span class="label">👶 Потомки:</span> <span class="value">Живы ${childrenAlive} - Умерли ${childrenDead}</span></div>
-        <div class="detail-row"><span class="label">📍 Координаты:</span> <span class="value">X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</span></div>
+        <div style="margin-bottom: 8px;">${statusHtml}</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span class="label">Имя:</span> <span class="value" style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
+          <div class="detail-row"><span class="label">Клан:</span> <span class="value" style="color:${clanColor};">${clanName}</span></div>
+          <div class="detail-row"><span class="label">Возраст:</span> <span class="value">${ageLabel}</span></div>
+          <div class="detail-row"><span class="label">Поколение:</span> <span class="value">${Math.floor(b.generation || 0)}</span></div>
+          <div class="detail-row"><span class="label">❤️ HP:</span> <span class="value">${hp} / ${maxHp}</span></div>
+          <div class="detail-row"><span class="label">💪 Сила:</span> <span class="value">${strength}</span></div>
+          <div class="detail-row"><span class="label">⚔️ Урон:</span> <span class="value">${damageEstimate}</span></div>
+          <div class="detail-row"><span class="label">🧠 Интеллект:</span> <span class="value">${intelligence}</span></div>
+          <div class="detail-row"><span class="label">⭐ Опыт:</span> <span class="value">${experience}</span></div>
+          <div class="detail-row"><span class="label">🍖 Голод:</span> <span class="value">${hunger}/${maxHunger}</span></div>
+          <div class="detail-row"><span class="label">📏 Размер:</span> <span class="value">${Math.round(sizePoints)}/${maxSizePoints}</span></div>
+          ${inventoryHtml}
+          <div class="detail-row"><span class="label">⚔️ Убийств:</span> <span class="value">${totalKills}</span></div>
+          <div class="detail-row"><span class="label">🍖 Еды:</span> <span class="value">${totalFood}</span></div>
+          <div class="detail-row"><span class="label">👶 Потомки:</span> <span class="value">Живы ${childrenAlive} - Умерли ${childrenDead}</span></div>
+          <div class="detail-row"><span class="label">📍 Координаты:</span> <span class="value">X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</span></div>
+          <div class="detail-row detail-full-width">${skillsHtml}</div>
+          ${mutationHtml ? `<div class="detail-row detail-full-width">${mutationHtml}</div>` : ''}
+        </div>
       `;
       detailPanel.style.display = "block";
     }
