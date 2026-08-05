@@ -1,7 +1,7 @@
 {
-  "name": "cytophage",
-  "version": "2.0.0",
-  "description": "Живой саморазвивающийся мир бактерий",
+  "name": "aquarium",
+  "version": "3.0.0",
+  "description": "Реалистичная симуляция аквариума с рыбками",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
