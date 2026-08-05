@@ -3,197 +3,324 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cytophage 2.0 — Живой мир</title>
+    <title>🐠 Аквариум — Живая экосистема</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            background: #0a0a1a;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0e1a;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             overflow: hidden;
             height: 100vh;
+            color: #e0e0e0;
         }
 
         #canvas {
             display: block;
-            background: #0d1117;
-            border-radius: 0;
+            cursor: crosshair;
         }
 
-        /* HUD - Верхняя панель */
+        /* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */
         .hud-top {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 12px 20px;
-            background: linear-gradient(180deg, rgba(10,10,26,0.95) 0%, rgba(10,10,26,0.7) 100%);
-            backdrop-filter: blur(10px);
+            top: 0; left: 0; right: 0;
+            padding: 10px 20px;
+            background: linear-gradient(180deg, rgba(10,14,26,0.95) 0%, rgba(10,14,26,0.8) 100%);
+            backdrop-filter: blur(12px);
             display: flex;
             align-items: center;
             justify-content: space-between;
             z-index: 100;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(100,200,255,0.2);
         }
 
         .server-status {
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 14px;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
 
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: #555;
             transition: all 0.3s;
         }
 
-        .status-dot.ok {
+        .status-dot.online {
             background: #00ff88;
-            box-shadow: 0 0 10px #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+            animation: pulse 2s infinite;
         }
 
-        .status-dot.bad {
+        .status-dot.offline {
             background: #ff4444;
-            box-shadow: 0 0 10px #ff4444;
+            box-shadow: 0 0 8px #ff4444;
         }
 
-        .ping-indicator {
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .ping-display {
             display: flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 12px;
+            padding: 6px 14px;
             background: rgba(255,255,255,0.05);
             border-radius: 20px;
-            font-size: 12px;
             font-family: monospace;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
 
         .ping-value {
             font-weight: bold;
-            color: #4ECDC4;
+            min-width: 40px;
         }
+
+        .ping-good { color: #00ff88; }
+        .ping-mid { color: #ffcc00; }
+        .ping-bad { color: #ff4444; }
 
         .stats-bar {
             display: flex;
-            gap: 20px;
+            gap: 16px;
             font-size: 13px;
         }
 
-        .stat-item {
+        .stat {
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
-        .stat-icon {
-            font-size: 16px;
-        }
-
+        .stat-label { color: #888; }
         .stat-value {
+            font-family: monospace;
             color: #79c0ff;
             font-weight: bold;
-            font-family: monospace;
         }
 
-        /* Боковая панель событий */
-        .events-panel {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 350px;
-            max-height: 300px;
-            background: rgba(10, 10, 26, 0.9);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid rgba(255,255,255,0.1);
-            z-index: 100;
-            overflow-y: auto;
-        }
-
-        .events-title {
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #888;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .event-item {
-            font-size: 12px;
-            padding: 4px 0;
-            color: #aaa;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
-        }
-
-        .event-item.combat { color: #ff6b6b; }
-        .event-item.birth { color: #00ff88; }
-        .event-item.system { color: #45b7d1; }
-
-        /* Панель кланов */
-        .clans-panel {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            width: 250px;
-            background: rgba(10, 10, 26, 0.9);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid rgba(255,255,255,0.1);
-            z-index: 100;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .clan-item {
+        .game-time {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 0;
+            gap: 6px;
+            padding: 6px 14px;
+            background: rgba(100,200,255,0.1);
+            border-radius: 20px;
+            border: 1px solid rgba(100,200,255,0.2);
+            font-family: monospace;
             font-size: 13px;
         }
 
-        .clan-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
+        /* ===== ПАНЕЛЬ ВОДЫ ===== */
+        .water-panel {
+            position: fixed;
+            top: 60px; left: 20px;
+            width: 200px;
+            background: rgba(10,14,26,0.9);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid rgba(100,200,255,0.2);
+            z-index: 100;
         }
 
-        .clan-name {
+        .panel-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        .meter {
+            margin-bottom: 10px;
+        }
+
+        .meter-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .meter-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s, background 0.5s;
+        }
+
+        .meter-fill.oxygen { background: linear-gradient(90deg, #ff4444, #ffcc00, #00ff88); }
+        .meter-fill.quality { background: linear-gradient(90deg, #8b4513, #ffcc00, #4169e1); }
+
+        /* ===== ПАНЕЛЬ ВИДОВ ===== */
+        .species-panel {
+            position: fixed;
+            top: 60px; right: 20px;
+            width: 280px;
+            background: rgba(10,14,26,0.9);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid rgba(100,200,255,0.2);
+            z-index: 100;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .species-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            border-left: 3px solid;
+        }
+
+        .species-icon {
+            font-size: 20px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .species-info {
             flex: 1;
+        }
+
+        .species-name {
+            font-size: 13px;
             font-weight: 500;
         }
 
-        .clan-count {
-            color: #79c0ff;
-            font-family: monospace;
+        .species-latin {
+            font-size: 10px;
+            color: #666;
+            font-style: italic;
         }
 
-        /* Подсказка */
+        .species-count {
+            text-align: right;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .count-adults { color: #79c0ff; }
+        .count-fry { color: #98fb98; }
+        .count-eggs { color: #ffd700; }
+
+        /* ===== ПАНЕЛЬ СОБЫТИЙ ===== */
+        .events-panel {
+            position: fixed;
+            bottom: 20px; left: 20px;
+            width: 400px;
+            max-height: 250px;
+            background: rgba(10,14,26,0.9);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid rgba(100,200,255,0.2);
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .event {
+            padding: 4px 0;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: #aaa;
+        }
+
+        .event.birth { color: #98fb98; }
+        .event.death { color: #ff6b6b; }
+        .event.combat { color: #ff9f43; }
+        .event.system { color: #79c0ff; }
+
+        .event-time {
+            font-family: monospace;
+            color: #555;
+            font-size: 10px;
+            margin-right: 8px;
+        }
+
+        /* ===== ТУЛТИП ===== */
         .tooltip {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(10, 10, 26, 0.9);
-            padding: 10px 15px;
-            border-radius: 8px;
+            background: rgba(10,14,26,0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(100,200,255,0.3);
+            border-radius: 10px;
+            padding: 12px 16px;
             font-size: 12px;
-            color: #888;
-            z-index: 100;
+            pointer-events: none;
+            z-index: 200;
+            display: none;
+            min-width: 200px;
         }
 
-        /* Скроллбар */
+        .tooltip-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-species {
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+            margin-bottom: 8px;
+        }
+
+        .tooltip-stats {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2px 10px;
+        }
+
+        .tooltip-label { color: #888; }
+        .tooltip-value { color: #79c0ff; font-family: monospace; }
+
+        .bar-mini {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .bar-mini-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .bar-energy .bar-mini-fill { background: #ffcc00; }
+        .bar-hp .bar-mini-fill { background: #00ff88; }
+
+        /* ===== СКРОЛЛ ===== */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(100,200,255,0.3); border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -202,54 +329,95 @@
     <!-- Верхняя панель -->
     <div class="hud-top">
         <div class="server-status">
-            <div class="status-dot" id="statusDot"></div>
-            <span id="serverText">Подключение...</span>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="serverText">Подключение...</span>
+            </div>
+            <div class="ping-display">
+                📡 <span class="ping-value" id="pingValue">---</span>ms
+            </div>
         </div>
 
         <div class="stats-bar">
-            <div class="stat-item">
-                <span class="stat-icon">🧬</span>
-                <span>Популяция:</span>
-                <span class="stat-value" id="popStat">0</span>
+            <div class="stat">
+                <span class="stat-label">🐟 Рыб:</span>
+                <span class="stat-value" id="fishCount">0</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-icon">🍎</span>
-                <span>Еда:</span>
-                <span class="stat-value" id="foodStat">0</span>
+            <div class="stat">
+                <span class="stat-label">👶 Мальков:</span>
+                <span class="stat-value" id="fryCount">0</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-icon">⏱️</span>
-                <span>Аптайм:</span>
-                <span class="stat-value" id="uptimeStat">0с</span>
+            <div class="stat">
+                <span class="stat-label">🥚 Икры:</span>
+                <span class="stat-value" id="eggCount">0</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-icon">⚡</span>
-                <span>Тик:</span>
-                <span class="stat-value" id="tickStat">0</span>
+            <div class="stat">
+                <span class="stat-label">🦠 Бактерий:</span>
+                <span class="stat-value" id="bacteriaCount">0</span>
             </div>
         </div>
 
-        <div class="ping-indicator">
-            <span>📡 Пинг:</span>
-            <span class="ping-value" id="pingValue">---ms</span>
+        <div class="game-time">
+            📅 День <span id="gameDay">0</span>
+            ⏰ <span id="gameHour">00</span>:00
         </div>
     </div>
 
-    <!-- Панель кланов -->
-    <div class="clans-panel">
-        <div class="events-title">Кланы</div>
-        <div id="clansContainer"></div>
+    <!-- Панель воды -->
+    <div class="water-panel">
+        <div class="panel-title">Состояние воды</div>
+        <div class="meter">
+            <div class="meter-label">
+                <span>💧 Кислород</span>
+                <span id="oxygenValue">100%</span>
+            </div>
+            <div class="meter-bar">
+                <div class="meter-fill oxygen" id="oxygenBar" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="meter">
+            <div class="meter-label">
+                <span>✨ Качество</span>
+                <span id="qualityValue">100%</span>
+            </div>
+            <div class="meter-bar">
+                <div class="meter-fill quality" id="qualityBar" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="meter">
+            <div class="meter-label">
+                <span>🌡️ Температура</span>
+                <span id="tempValue">25°C</span>
+            </div>
+        </div>
+        <div class="meter">
+            <div class="meter-label">
+                <span>⚗️ pH</span>
+                <span id="phValue">7.0</span>
+            </div>
+        </div>
+        <div class="meter" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div class="meter-label">
+                <span>⏱️ Аптайм сервера</span>
+                <span id="uptimeValue" style="color: #79c0ff;">0м</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Панель видов -->
+    <div class="species-panel">
+        <div class="panel-title">Виды рыб</div>
+        <div id="speciesContainer"></div>
     </div>
 
     <!-- Панель событий -->
     <div class="events-panel">
-        <div class="events-title">Летопись мира</div>
+        <div class="panel-title">Летопись аквариума</div>
         <div id="eventsContainer"></div>
     </div>
 
-    <div class="tooltip">
-        🖱️ Наведите на бактерию для деталей
-    </div>
+    <!-- Тултип -->
+    <div class="tooltip" id="tooltip"></div>
 
     <script>
         const SERVER_URL = window.location.origin;
@@ -257,13 +425,15 @@
         const ctx = canvas.getContext("2d");
 
         let worldState = null;
-        let lastFetch = 0;
         let pingMs = 0;
-        let lastPingTime = 0;
-        let isServerOk = false;
-        let hoveredBacterium = null;
+        let lastPingTime = Date.now();
+        let serverOnline = false;
+        let hoveredEntity = null;
+        let mouseX = 0, mouseY = 0;
 
-        // Размер canvas
+        // Масштабирование
+        let scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0;
+
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -271,101 +441,138 @@
         window.addEventListener("resize", resize);
         resize();
 
-        // Форматирование аптайма
+        // ====== ФОРМАТИРОВАНИЕ ======
         function formatUptime(seconds) {
             if (seconds < 60) return `${seconds}с`;
-            if (seconds < 3600) return `${Math.floor(seconds/60)}м ${seconds%60}с`;
+            if (seconds < 3600) return `${Math.floor(seconds/60)}м`;
             const h = Math.floor(seconds / 3600);
             const m = Math.floor((seconds % 3600) / 60);
             return `${h}ч ${m}м`;
         }
 
-        // Fetch состояния
+        // ====== ИКОНКИ ВИДОВ ======
+        const SPECIES_ICONS = {
+            guppy: "🐠",
+            neon: "✨",
+            angelfish: "👼",
+            swordtail: "⚔️",
+            corydoras: "🐡",
+            cichlid: "🦈",
+        };
+
+        // ====== FETCH ======
         async function fetchState() {
-            const startTime = Date.now();
+            const start = Date.now();
             try {
                 const res = await fetch(`${SERVER_URL}/state`, { cache: "no-cache" });
                 const data = await res.json();
                 worldState = data;
-                pingMs = Date.now() - startTime;
+                pingMs = Date.now() - start;
                 lastPingTime = Date.now();
 
-                if (!isServerOk) {
-                    isServerOk = true;
-                    document.getElementById("statusDot").classList.add("ok");
-                    document.getElementById("statusDot").classList.remove("bad");
+                if (!serverOnline) {
+                    serverOnline = true;
+                    document.getElementById("statusDot").classList.add("online");
+                    document.getElementById("statusDot").classList.remove("offline");
                     document.getElementById("serverText").textContent = "Сервер онлайн";
                 }
-
                 updateHUD();
             } catch (err) {
-                console.error("Fetch error:", err);
-                if (isServerOk) {
-                    isServerOk = false;
-                    document.getElementById("statusDot").classList.remove("ok");
-                    document.getElementById("statusDot").classList.add("bad");
-                    document.getElementById("serverText").textContent = "Сервер недоступен";
+                if (serverOnline) {
+                    serverOnline = false;
+                    document.getElementById("statusDot").classList.remove("online");
+                    document.getElementById("statusDot").classList.add("offline");
+                    document.getElementById("serverText").textContent = "Сервер офлайн";
                 }
             }
         }
 
-        // Пинг
-        async function fetchPing() {
-            try {
-                const res = await fetch(`${SERVER_URL}/ping`, { cache: "no-cache" });
-                const data = await res.json();
-                if (data.status === "alive") {
-                    pingMs = Date.now() - lastPingTime || 50;
-                }
-            } catch(e) {}
-        }
-
-        // Обновление HUD
+        // ====== ОБНОВЛЕНИЕ UI ======
         function updateHUD() {
             if (!worldState) return;
 
-            const stats = worldState.stats;
-            document.getElementById("popStat").textContent = stats.population;
-            document.getElementById("foodStat").textContent = stats.foodCount;
-            document.getElementById("uptimeStat").textContent = formatUptime(stats.uptime);
-            document.getElementById("tickStat").textContent = stats.tickCount;
+            // Статы
+            document.getElementById("fishCount").textContent = worldState.fishes.length;
+            document.getElementById("fryCount").textContent = worldState.fry.length;
+            document.getElementById("eggCount").textContent = worldState.eggs.length;
+            document.getElementById("bacteriaCount").textContent = worldState.bacteria.length;
 
-            const pingColor = pingMs < 100 ? "#00ff88" : pingMs < 300 ? "#ffe66d" : "#ff6b6b";
-            document.getElementById("pingValue").textContent = `${pingMs}ms`;
-            document.getElementById("pingValue").style.color = pingColor;
+            // Игровое время
+            document.getElementById("gameDay").textContent = worldState.gameTime.days;
+            document.getElementById("gameHour").textContent = String(worldState.gameTime.hours).padStart(2, "0");
 
-            // Кланы
-            const clansContainer = document.getElementById("clansContainer");
-            clansContainer.innerHTML = "";
-            if (stats.clanStats) {
-                const sorted = Object.entries(stats.clanStats)
-                    .sort((a, b) => b[1].count - a[1].count);
-                for (const [id, clan] of sorted) {
-                    const div = document.createElement("div");
-                    div.className = "clan-item";
-                    div.innerHTML = `
-                        <div class="clan-dot" style="background: ${clan.color}"></div>
-                        <span class="clan-name">Клан ${id}</span>
-                        <span class="clan-count">${clan.count} (g${clan.avgGen})</span>
-                    `;
-                    clansContainer.appendChild(div);
-                }
+            // Пинг
+            const pingEl = document.getElementById("pingValue");
+            pingEl.textContent = pingMs;
+            pingEl.className = "ping-value " + (pingMs < 100 ? "ping-good" : pingMs < 300 ? "ping-mid" : "ping-bad");
+
+            // Вода
+            const env = worldState.environment;
+            document.getElementById("oxygenValue").textContent = Math.round(env.oxygen) + "%";
+            document.getElementById("oxygenBar").style.width = env.oxygen + "%";
+            document.getElementById("qualityValue").textContent = Math.round(env.quality) + "%";
+            document.getElementById("qualityBar").style.width = env.quality + "%";
+            document.getElementById("tempValue").textContent = env.temperature.toFixed(1) + "°C";
+            document.getElementById("phValue").textContent = env.ph.toFixed(1);
+            document.getElementById("uptimeValue").textContent = formatUptime(worldState.stats.serverUptime);
+
+            // Виды
+            const container = document.getElementById("speciesContainer");
+            container.innerHTML = "";
+            for (const [key, stats] of Object.entries(worldState.speciesStats)) {
+                if (stats.adults + stats.fry + stats.eggs === 0) continue;
+
+                const spec = worldState.species[key];
+                const div = document.createElement("div");
+                div.className = "species-item";
+                div.style.borderLeftColor = spec.color.body;
+                div.innerHTML = `
+                    <span class="species-icon">${SPECIES_ICONS[key] || "🐟"}</span>
+                    <div class="species-info">
+                        <div class="species-name">${spec.name}</div>
+                        <div class="species-latin">${spec.nameLatin}</div>
+                    </div>
+                    <div class="species-count">
+                        <div class="count-adults">🐟 ${stats.adults}</div>
+                        ${stats.fry > 0 ? `<div class="count-fry">👶 ${stats.fry}</div>` : ""}
+                        ${stats.eggs > 0 ? `<div class="count-eggs">🥚 ${stats.eggs}</div>` : ""}
+                    </div>
+                `;
+                container.appendChild(div);
             }
 
             // События
             const eventsContainer = document.getElementById("eventsContainer");
             eventsContainer.innerHTML = "";
-            if (worldState.events) {
-                for (const event of worldState.events.slice(-15).reverse()) {
-                    const div = document.createElement("div");
-                    div.className = `event-item ${event.type}`;
-                    div.textContent = event.message;
-                    eventsContainer.appendChild(div);
-                }
+            for (const event of [...worldState.events].reverse().slice(0, 20)) {
+                const div = document.createElement("div");
+                div.className = `event ${event.type}`;
+                div.innerHTML = `<span class="event-time">Д${event.gameDay}</span>${event.message}`;
+                eventsContainer.appendChild(div);
             }
         }
 
-        // Отрисовка
+        // ====== ОТРИСОВКА ======
+
+        // Масштаб мира
+        function updateScale() {
+            if (!worldState) return;
+            const w = worldState.config.aquarium.width;
+            const h = worldState.config.aquarium.height;
+
+            scaleX = (canvas.width - 40) / w;
+            scaleY = (canvas.height - 120) / h;
+            const scale = Math.min(scaleX, scaleY);
+            scaleX = scaleY = scale;
+
+            offsetX = (canvas.width - w * scale) / 2;
+            offsetY = 60 + (canvas.height - 120 - h * scale) / 2;
+        }
+
+        function toScreen(x, y) {
+            return { x: offsetX + x * scaleX, y: offsetY + y * scaleY };
+        }
+
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -374,131 +581,579 @@
                 return;
             }
 
-            // Масштабирование мира к экрану
-            const scaleX = canvas.width / worldState.world.width;
-            const scaleY = canvas.height / worldState.world.height;
-            const scale = Math.min(scaleX, scaleY) * 0.9;
-            const offsetX = (canvas.width - worldState.world.width * scale) / 2;
-            const offsetY = (canvas.height - worldState.world.height * scale) / 2;
+            updateScale();
 
-            // Рисуем границу мира
-            ctx.strokeStyle = "rgba(255,255,255,0.1)";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(
-                offsetX, offsetY,
-                worldState.world.width * scale,
-                worldState.world.height * scale
-            );
+            const W = worldState.config.aquarium.width;
+            const H = worldState.config.aquarium.height;
+            const sandH = 80;
 
-            // Еда
-            ctx.fillStyle = "#4ECDC4";
-            for (const f of worldState.food) {
-                const sx = offsetX + f.x * scale;
-                const sy = offsetY + f.y * scale;
+            // ====== ФОН (стена за аквариумом) ======
+            ctx.fillStyle = "#0a0e1a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // ====== АКВАРИУМ ======
+            const topLeft = toScreen(0, 0);
+            const bottomRight = toScreen(W, H);
+            const aqW = bottomRight.x - topLeft.x;
+            const aqH = bottomRight.y - topLeft.y;
+
+            // Рамка аквариума
+            ctx.strokeStyle = "#1a2a3a";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(topLeft.x - 4, topLeft.y - 4, aqW + 8, aqH + 8);
+
+            // Вода (градиент)
+            const waterGrad = ctx.createLinearGradient(topLeft.x, topLeft.y, topLeft.x, bottomRight.y);
+            waterGrad.addColorStop(0, "rgba(20, 60, 100, 0.9)");
+            waterGrad.addColorStop(0.3, "rgba(15, 50, 80, 0.95)");
+            waterGrad.addColorStop(1, "rgba(10, 30, 50, 1)");
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(topLeft.x, topLeft.y, aqW, aqH);
+            ctx.clip();
+
+            ctx.fillStyle = waterGrad;
+            ctx.fillRect(topLeft.x, topLeft.y, aqW, aqH);
+
+            // ====== ПЕСОК ======
+            const sandY = bottomRight.y - sandH * scaleY;
+            const sandGrad = ctx.createLinearGradient(topLeft.x, sandY, topLeft.x, bottomRight.y);
+            sandGrad.addColorStop(0, "#8B7355");
+            sandGrad.addColorStop(0.3, "#6B5B45");
+            sandGrad.addColorStop(1, "#4a3f30");
+
+            ctx.fillStyle = sandGrad;
+            ctx.fillRect(topLeft.x, sandY, aqW, sandH * scaleY + 5);
+
+            // Текстура песка (точки)
+            ctx.fillStyle = "rgba(255,255,255,0.05)";
+            for (let i = 0; i < 200; i++) {
+                const px = topLeft.x + (i * 7 + 3) % aqW;
+                const py = sandY + (i * 13 + 5) % (sandH * scaleY);
+                ctx.fillRect(px, py, 1, 1);
+            }
+
+            // ====== КАМНИ ======
+            for (const rock of worldState.rocks) {
+                const pos = toScreen(rock.x, rock.y);
+                const w = rock.width * scaleX;
+                const h = rock.height * scaleY;
+
+                ctx.fillStyle = rock.color;
                 ctx.beginPath();
-                ctx.arc(sx, sy, Math.max(1, f.radius * scale * 0.3), 0, Math.PI * 2);
+                ctx.ellipse(pos.x, pos.y, w / 2, h / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Блик
+                ctx.fillStyle = "rgba(255,255,255,0.1)";
+                ctx.beginPath();
+                ctx.ellipse(pos.x - w * 0.15, pos.y - h * 0.15, w * 0.15, h * 0.1, -0.3, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Бактерии
-            hoveredBacterium = null;
-            for (const b of worldState.bacteria) {
-                const sx = offsetX + b.x * scale;
-                const sy = offsetY + b.y * scale;
-                const sr = Math.max(3, b.size * scale * 0.8);
+            // ====== РАСТЕНИЯ ======
+            const time = Date.now() * 0.001;
+            for (const plant of worldState.plants) {
+                drawPlant(plant, time);
+            }
 
-                // Проверяем наведение
-                const dx = mouseX - sx;
-                const dy = mouseY - sy;
-                if (dx*dx + dy*dy < sr*sr + 100) {
-                    hoveredBacterium = b;
-                }
+            // ====== ЕДА ======
+            for (const food of worldState.food) {
+                const pos = toScreen(food.x, food.y);
+                const size = food.size * scaleX;
 
-                // Тело
-                const energyPercent = b.energy / 100;
-                ctx.globalAlpha = 0.6 + energyPercent * 0.4;
-                ctx.fillStyle = b.clanColor;
+                ctx.fillStyle = "#D4A574";
                 ctx.beginPath();
-                ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Обводка
-                ctx.globalAlpha = 1;
-                ctx.strokeStyle = b.clanColor;
-                ctx.lineWidth = 2;
+                ctx.fillStyle = "rgba(255,200,100,0.3)";
+                ctx.beginPath();
+                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ====== ИКРА ======
+            for (const egg of worldState.eggs) {
+                const pos = toScreen(egg.x, egg.y);
+                const size = egg.size * scaleX;
+                const spec = worldState.species[egg.species];
+
+                // Икринка
+                ctx.fillStyle = "rgba(255,255,200,0.8)";
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Блик
+                ctx.fillStyle = "rgba(255,255,255,0.6)";
+                ctx.beginPath();
+                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ====== ТРУПЫ ======
+            for (const corpse of worldState.corpses) {
+                drawCorpse(corpse);
+            }
+
+            // ====== БАКТЕРИИ ======
+            ctx.fillStyle = "rgba(100, 255, 100, 0.4)";
+            for (const b of worldState.bacteria) {
+                const pos = toScreen(b.x, b.y);
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ====== МАЛЬКИ ======
+            for (const fry of worldState.fry) {
+                drawFry(fry);
+            }
+
+            // ====== РЫБЫ ======
+            hoveredEntity = null;
+            for (const fish of worldState.fishes) {
+                drawFish(fish);
+            }
+
+            // ====== ПУЗЫРЬКИ ======
+            ctx.fillStyle = "rgba(200, 230, 255, 0.3)";
+            for (const bubble of worldState.bubbles) {
+                const pos = toScreen(bubble.x, bubble.y);
+                const size = bubble.size * scaleX;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Блик
+                ctx.strokeStyle = "rgba(255,255,255,0.4)";
+                ctx.lineWidth = 0.5;
                 ctx.stroke();
 
-                // HP бар
-                if (b.hp < 100) {
-                    const hpPercent = b.hp / 100;
-                    ctx.fillStyle = "rgba(0,0,0,0.5)";
-                    ctx.fillRect(sx - sr, sy - sr - 6, sr * 2, 3);
-                    ctx.fillStyle = hpPercent > 0.5 ? "#00ff88" : hpPercent > 0.25 ? "#ffe66d" : "#ff4444";
-                    ctx.fillRect(sx - sr, sy - sr - 6, sr * 2 * hpPercent, 3);
-                }
-
-                // ID
-                if (sr > 5) {
-                    ctx.fillStyle = "rgba(255,255,255,0.8)";
-                    ctx.font = `${Math.max(8, sr * 0.8)}px monospace`;
-                    ctx.textAlign = "center";
-                    ctx.fillText(`#${b.id}`, sx, sy + 3);
-                }
+                ctx.fillStyle = "rgba(255,255,255,0.4)";
+                ctx.beginPath();
+                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "rgba(200, 230, 255, 0.3)";
             }
 
-            // Тултип при наведении
-            if (hoveredBacterium) {
-                const b = hoveredBacterium;
-                const tooltipX = offsetX + b.x * scale + 20;
-                const tooltipY = offsetY + b.y * scale - 20;
+            ctx.restore();
 
-                ctx.fillStyle = "rgba(10,10,26,0.95)";
-                ctx.strokeStyle = b.clanColor;
-                ctx.lineWidth = 1;
+            // ====== БЛИКИ НА СТЕКЛЕ ======
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(topLeft.x + 20, topLeft.y + 10);
+            ctx.lineTo(topLeft.x + 20, topLeft.y + aqH * 0.3);
+            ctx.stroke();
 
-                const text = [
-                    `ID: #${b.id} (Клан ${b.clanId})`,
-                    `Поколение: ${b.generation}`,
-                    `Энергия: ${b.energy}/100`,
-                    `HP: ${b.hp}/100`,
-                    `Возраст: ${Math.floor(b.age / 20)}с`,
-                    `Скорость: ${b.speed}`,
-                    `Размер: ${b.size}`,
-                    `Агрессия: ${(b.aggression * 100).toFixed(0)}%`,
-                    `Цель: ${b.target || "блуждание"}`,
-                ];
-
-                const lineHeight = 16;
-                const padding = 10;
-                const width = 200;
-                const height = text.length * lineHeight + padding * 2;
-
-                ctx.fillRect(tooltipX, tooltipY, width, height);
-                ctx.strokeRect(tooltipX, tooltipY, width, height);
-
-                ctx.fillStyle = "#e0e0e0";
-                ctx.font = "12px monospace";
-                ctx.textAlign = "left";
-                text.forEach((line, i) => {
-                    ctx.fillText(line, tooltipX + padding, tooltipY + padding + (i + 1) * lineHeight);
-                });
+            // ====== ТУЛТИП ======
+            if (hoveredEntity) {
+                drawTooltip(hoveredEntity);
             }
 
             requestAnimationFrame(draw);
         }
 
-        // Мышь
-        let mouseX = 0, mouseY = 0;
+        function drawPlant(plant, time) {
+            const base = toScreen(plant.x, plant.baseY);
+            const scale = scaleX;
+
+            const sway = Math.sin(time * 0.5 + plant.swayOffset) * 8 * scale;
+
+            // Стебель
+            ctx.strokeStyle = "#2d5016";
+            ctx.lineWidth = 3 * scale;
+            ctx.beginPath();
+            ctx.moveTo(base.x, base.y);
+
+            const segments = 8;
+            const height = plant.height * scale;
+            const segH = height / segments;
+
+            let px = base.x;
+            let py = base.y;
+
+            for (let i = 1; i <= segments; i++) {
+                const t = i / segments;
+                const swayAmount = sway * t * t;
+                px = base.x + swayAmount;
+                py = base.y - segH * i;
+                ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+
+            // Листья
+            ctx.fillStyle = "#3a8025";
+            for (let i = 0; i < plant.leaves; i++) {
+                const t = (i + 1) / (plant.leaves + 1);
+                const lx = base.x + sway * t * t;
+                const ly = base.y - height * t;
+                const leafSize = (20 + Math.random() * 10) * scale * (1 - t * 0.3);
+
+                const side = i % 2 === 0 ? 1 : -1;
+                const leafAngle = side * 0.5 + Math.sin(time * 0.8 + i) * 0.1;
+
+                ctx.save();
+                ctx.translate(lx, ly);
+                ctx.rotate(leafAngle);
+
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(
+                    leafSize * 0.3, -leafSize * 0.2,
+                    leafSize * 0.8, -leafSize * 0.1,
+                    leafSize, 0
+                );
+                ctx.bezierCurveTo(
+                    leafSize * 0.8, leafSize * 0.1,
+                    leafSize * 0.3, leafSize * 0.2,
+                    0, 0
+                );
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function drawFish(fish) {
+            const pos = toScreen(fish.x, fish.y);
+            const size = fish.size * scaleX;
+            const spec = worldState.species[fish.species];
+            const dir = fish.facingRight ? 1 : -1;
+
+            // Проверка наведения
+            const dx = mouseX - pos.x;
+            const dy = mouseY - pos.y;
+            if (dx * dx + dy * dy < (size + 10) * (size + 10)) {
+                hoveredEntity = { type: "fish", data: fish };
+            }
+
+            const swimOffset = Math.sin(fish.swimPhase || 0) * size * 0.1;
+
+            ctx.save();
+            ctx.translate(pos.x, pos.y + swimOffset * 0.3);
+            ctx.scale(dir, 1);
+
+            // ===== ХВОСТ =====
+            const tailWag = Math.sin((fish.swimPhase || 0) * 2) * 0.3;
+
+            ctx.fillStyle = spec.color.tail || spec.color.body;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.5, 0);
+            ctx.lineTo(-size * 1.2 + Math.cos(tailWag) * size * 0.15, -size * 0.5);
+            ctx.quadraticCurveTo(-size * 1.0, 0, -size * 1.2 + Math.cos(tailWag) * size * 0.15, size * 0.5);
+            ctx.closePath();
+            ctx.fill();
+
+            // ===== ТЕЛО =====
+            ctx.fillStyle = spec.color.body;
+            ctx.beginPath();
+
+            if (fish.species === "angelfish") {
+                // Треугольная форма скалярии
+                ctx.moveTo(size * 0.7, 0);
+                ctx.quadraticCurveTo(size * 0.3, -size * 0.8, 0, -size * 1.0);
+                ctx.quadraticCurveTo(-size * 0.3, -size * 0.8, -size * 0.5, 0);
+                ctx.quadraticCurveTo(-size * 0.3, size * 0.8, 0, size * 1.0);
+                ctx.quadraticCurveTo(size * 0.3, size * 0.8, size * 0.7, 0);
+            } else {
+                // Обычная овальная форма
+                ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
+            }
+            ctx.fill();
+
+            // Полоски (для неонов)
+            if (spec.color.stripe) {
+                ctx.fillStyle = spec.color.stripe;
+                ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.005) * 0.2;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, size * 0.7, size * 0.15, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // Полоски (для скалярий)
+            if (spec.color.stripes && fish.species === "angelfish") {
+                ctx.strokeStyle = spec.color.stripes;
+                ctx.lineWidth = size * 0.06;
+                for (let i = -1; i <= 1; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * size * 0.2, -size * 0.5);
+                    ctx.lineTo(i * size * 0.2, size * 0.5);
+                    ctx.stroke();
+                }
+            }
+
+            // Пятна (для цихлид)
+            if (spec.color.spots && fish.species === "cichlid") {
+                ctx.fillStyle = spec.color.spots;
+                ctx.beginPath();
+                ctx.arc(size * 0.3, -size * 0.1, size * 0.12, 0, Math.PI * 2);
+                ctx.arc(-size * 0.1, size * 0.15, size * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Меч (для меченосцев)
+            if (spec.hasSword && fish.gender === "male") {
+                ctx.fillStyle = spec.color.sword || "#FFD700";
+                ctx.beginPath();
+                ctx.moveTo(-size * 1.1, 0);
+                ctx.lineTo(-size * 2.0, size * 0.15);
+                ctx.lineTo(-size * 1.1, size * 0.05);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // Верхний плавник
+            ctx.fillStyle = spec.color.tail || spec.color.body;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.1, -size * 0.35);
+            ctx.quadraticCurveTo(size * 0.1, -size * 0.7, size * 0.3, -size * 0.4);
+            ctx.quadraticCurveTo(size * 0.2, -size * 0.35, -size * 0.1, -size * 0.35);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Нижний плавник
+            ctx.beginPath();
+            ctx.moveTo(0, size * 0.35);
+            ctx.quadraticCurveTo(size * 0.15, size * 0.6, size * 0.25, size * 0.4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Грудной плавник (анимированный)
+            const finWag = Math.sin((fish.swimPhase || 0) * 3) * 0.2;
+            ctx.save();
+            ctx.translate(size * 0.2, size * 0.15);
+            ctx.rotate(finWag);
+            ctx.fillStyle = spec.color.body;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.ellipse(0, size * 0.1, size * 0.15, size * 0.1, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // Глаз
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(size * 0.45, -size * 0.08, size * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#000000";
+            ctx.beginPath();
+            ctx.arc(size * 0.47, -size * 0.08, size * 0.07, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Блик глаза
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(size * 0.49, -size * 0.1, size * 0.03, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Рот
+            ctx.strokeStyle = "rgba(0,0,0,0.3)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(size * 0.7, size * 0.05, size * 0.05, 0, Math.PI * 0.5);
+            ctx.stroke();
+
+            // Индикатор беременности
+            if (fish.pregnant) {
+                ctx.fillStyle = "rgba(255, 100, 200, 0.4)";
+                ctx.beginPath();
+                ctx.arc(-size * 0.1, size * 0.1, size * 0.25, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            // HP бар если повреждена
+            if (fish.hp < 100) {
+                const barWidth = size * 1.5;
+                const barX = pos.x - barWidth / 2;
+                const barY = pos.y - size - 10;
+                const hpPct = fish.hp / 100;
+
+                ctx.fillStyle = "rgba(0,0,0,0.5)";
+                ctx.fillRect(barX, barY, barWidth, 4);
+
+                ctx.fillStyle = hpPct > 0.5 ? "#00ff88" : hpPct > 0.25 ? "#ffcc00" : "#ff4444";
+                ctx.fillRect(barX, barY, barWidth * hpPct, 4);
+            }
+
+            // Имя над рыбой (если большая)
+            if (size > 10) {
+                ctx.fillStyle = "rgba(255,255,255,0.7)";
+                ctx.font = `${Math.max(8, size * 0.3)}px 'Segoe UI'`;
+                ctx.textAlign = "center";
+                ctx.fillText(fish.name, pos.x, pos.y - size - 12);
+            }
+        }
+
+        function drawFry(fry) {
+            const pos = toScreen(fry.x, fry.y);
+            const size = fry.size * scaleX;
+
+            const dx = mouseX - pos.x;
+            const dy = mouseY - pos.y;
+            if (dx * dx + dy * dy < (size + 8) * (size + 8)) {
+                hoveredEntity = { type: "fry", data: fry };
+            }
+
+            const dir = fry.facingRight ? 1 : -1;
+
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.scale(dir, 1);
+
+            // Тельце
+            ctx.fillStyle = "rgba(255,255,200,0.7)";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, size * 0.6, size * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Хвостик
+            ctx.fillStyle = fry.color.body;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.5, 0);
+            ctx.lineTo(-size * 1.0, -size * 0.25);
+            ctx.lineTo(-size * 1.0, size * 0.25);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Глаз
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.arc(size * 0.3, -size * 0.05, size * 0.08, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawCorpse(corpse) {
+            const pos = toScreen(corpse.x, corpse.y);
+            const size = corpse.size * scaleX;
+            const dir = corpse.facingRight ? 1 : -1;
+
+            const decomp = corpse.decomposition / 100;
+
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.scale(dir, -1); // перевёрнута
+            ctx.globalAlpha = 1 - decomp * 0.5;
+
+            // Бледное тело
+            const gray = Math.floor(200 - decomp * 100);
+            ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Хвост
+            ctx.fillStyle = `rgb(${gray - 30}, ${gray - 30}, ${gray - 30})`;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.5, 0);
+            ctx.lineTo(-size * 1.0, -size * 0.3);
+            ctx.lineTo(-size * 1.0, size * 0.3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Глаз X_X
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(size * 0.4, -size * 0.15);
+            ctx.lineTo(size * 0.55, 0);
+            ctx.moveTo(size * 0.55, -size * 0.15);
+            ctx.lineTo(size * 0.4, 0);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawTooltip(entity) {
+            const tooltip = document.getElementById("tooltip");
+            let html = "";
+
+            if (entity.type === "fish") {
+                const f = entity.data;
+                const spec = worldState.species[f.species];
+                const agePercent = (f.age / f.lifespan) * 100;
+
+                html = `
+                    <div class="tooltip-name" style="color: ${spec.color.body}">${f.name}</div>
+                    <div class="tooltip-species">${spec.name} (${spec.nameLatin}) ${f.gender === "male" ? "♂" : "♀"}</div>
+                    <div class="tooltip-stats">
+                        <span class="tooltip-label">Поколение:</span>
+                        <span class="tooltip-value">gen ${f.generation}</span>
+                        <span class="tooltip-label">Возраст:</span>
+                        <span class="tooltip-value">${Math.floor(f.age)} / ${f.lifespan} дней</span>
+                        <span class="tooltip-label">Размер:</span>
+                        <span class="tooltip-value">${f.size.toFixed(1)} мм</span>
+                        <span class="tooltip-label">Скорость:</span>
+                        <span class="tooltip-value">${f.speed.toFixed(2)}</span>
+                    </div>
+                    <div style="margin-top: 8px;">
+                        <div style="font-size: 11px; color: #888;">Энергия: ${Math.round(f.energy)}%</div>
+                        <div class="bar-mini bar-energy"><div class="bar-mini-fill" style="width: ${f.energy}%; background: #ffcc00;"></div></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: #888;">HP: ${Math.round(f.hp)}%</div>
+                        <div class="bar-mini bar-hp"><div class="bar-mini-fill" style="width: ${f.hp}%;"></div></div>
+                    </div>
+                    ${f.pregnant ? `<div style="margin-top: 6px; color: #ff69b4;">🤰 Беременна (${Math.floor(f.gestationLeft)} дн.)</div>` : ""}
+                    <div style="margin-top: 6px; font-size: 10px; color: #555;">Цель: ${f.targetType}</div>
+                `;
+            } else if (entity.type === "fry") {
+                const f = entity.data;
+                const spec = worldState.species[f.species];
+                html = `
+                    <div class="tooltip-name" style="color: #98fb98">👶 ${f.name}</div>
+                    <div class="tooltip-species">Малёк ${spec.name}</div>
+                    <div class="tooltip-stats">
+                        <span class="tooltip-label">Поколение:</span>
+                        <span class="tooltip-value">gen ${f.generation}</span>
+                        <span class="tooltip-label">Возраст:</span>
+                        <span class="tooltip-value">${Math.floor(f.growthDays)} / ${Math.floor(spec.maturity * 0.7)} дней</span>
+                        <span class="tooltip-label">Энергия:</span>
+                        <span class="tooltip-value">${Math.round(f.energy)}%</span>
+                    </div>
+                `;
+            }
+
+            tooltip.innerHTML = html;
+            tooltip.style.display = "block";
+            tooltip.style.left = (mouseX + 20) + "px";
+            tooltip.style.top = (mouseY - 10) + "px";
+
+            // Не выходим за пределы экрана
+            const rect = tooltip.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                tooltip.style.left = (mouseX - rect.width - 10) + "px";
+            }
+            if (rect.bottom > window.innerHeight) {
+                tooltip.style.top = (mouseY - rect.height) + "px";
+            }
+        }
+
+        // ====== МЫШЬ ======
         canvas.addEventListener("mousemove", (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
         });
 
-        // Запуск
-        setInterval(fetchState, 200);
-        setInterval(fetchPing, 5000);
+        canvas.addEventListener("mouseleave", () => {
+            document.getElementById("tooltip").style.display = "none";
+        });
+
+        // ====== ЗАПУСК ======
+        setInterval(fetchState, 300);
         fetchState();
-        fetchPing();
         requestAnimationFrame(draw);
     </script>
 </body>
