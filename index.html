@@ -1,623 +1,974 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🐠 Аквариум — Живая экосистема</title>
-<style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0a0e1a; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; height: 100vh; color: #e0e0e0; }
-    #canvas { display: block; cursor: crosshair; }
-    .hud-top { position: fixed; top: 0; left: 0; right: 0; padding: 10px 20px;
-        background: linear-gradient(180deg, rgba(10,14,26,0.95), rgba(10,14,26,0.8));
-        backdrop-filter: blur(12px); display: flex; align-items: center;
-        justify-content: space-between; z-index: 100; border-bottom: 1px solid rgba(100,200,255,0.2); flex-wrap: wrap; gap: 8px; }
-    .server-status { display: flex; align-items: center; gap: 10px; }
-    .status-indicator { display: flex; align-items: center; gap: 8px; padding: 6px 14px;
-        background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); font-size: 13px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; transition: all 0.3s; }
-    .status-dot.online { background: #00ff88; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
-    .status-dot.offline { background: #ff4444; box-shadow: 0 0 8px #ff4444; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-    .ping-display { display: flex; align-items: center; gap: 6px; padding: 6px 14px;
-        background: rgba(255,255,255,0.05); border-radius: 20px; font-family: monospace; font-size: 13px;
-        border: 1px solid rgba(255,255,255,0.1); }
-    .ping-good { color: #00ff88; } .ping-mid { color: #ffcc00; } .ping-bad { color: #ff4444; }
-    .stats-bar { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
-    .stat { display: flex; align-items: center; gap: 6px; }
-    .stat-label { color: #888; }
-    .stat-value { font-family: monospace; color: #79c0ff; font-weight: bold; }
-    .game-time { display: flex; align-items: center; gap: 6px; padding: 6px 14px;
-        background: rgba(100,200,255,0.1); border-radius: 20px; border: 1px solid rgba(100,200,255,0.2);
-        font-family: monospace; font-size: 13px; }
-    .water-panel { position: fixed; top: 60px; left: 20px; width: 200px; background: rgba(10,14,26,0.9);
-        backdrop-filter: blur(12px); border-radius: 12px; padding: 14px; border: 1px solid rgba(100,200,255,0.2); z-index: 100; }
-    .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 12px; }
-    .meter { margin-bottom: 10px; }
-    .meter-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-    .meter-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
-    .meter-fill.oxygen { background: linear-gradient(90deg, #ff4444, #ffcc00, #00ff88); }
-    .meter-fill.quality { background: linear-gradient(90deg, #8b4513, #ffcc00, #4169e1); }
-    .species-panel { position: fixed; top: 60px; right: 20px; width: 280px; background: rgba(10,14,26,0.9);
-        backdrop-filter: blur(12px); border-radius: 12px; padding: 14px; border: 1px solid rgba(100,200,255,0.2);
-        z-index: 100; max-height: 500px; overflow-y: auto; }
-    .species-item { display: flex; align-items: center; gap: 10px; padding: 8px; margin-bottom: 6px;
-        background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid; }
-    .species-icon { font-size: 20px; min-width: 30px; text-align: center; }
-    .species-info { flex: 1; }
-    .species-name { font-size: 13px; font-weight: 500; }
-    .species-latin { font-size: 10px; color: #666; font-style: italic; }
-    .species-count { text-align: right; font-family: monospace; font-size: 12px; }
-    .count-adults { color: #79c0ff; } .count-fry { color: #98fb98; } .count-eggs { color: #ffd700; }
-    .events-panel { position: fixed; bottom: 20px; left: 20px; width: 400px; max-height: 220px;
-        background: rgba(10,14,26,0.9); backdrop-filter: blur(12px); border-radius: 12px; padding: 14px;
-        border: 1px solid rgba(100,200,255,0.2); z-index: 100; overflow-y: auto; }
-    .event { padding: 4px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); color: #aaa; }
-    .event.birth { color: #98fb98; } .event.death { color: #ff6b6b; }
-    .event.combat { color: #ff9f43; } .event.system { color: #79c0ff; }
-    .event-time { font-family: monospace; color: #555; font-size: 10px; margin-right: 8px; }
-    .feed-panel { position: fixed; bottom: 20px; right: 20px; z-index: 100;
-        background: rgba(10,14,26,0.9); backdrop-filter: blur(12px); border-radius: 14px;
-        padding: 16px; border: 1px solid rgba(255,200,100,0.3); text-align: center; }
-    #feedBtn { background: linear-gradient(135deg, #ff9f43, #ff6b35); color: #fff; border: none;
-        padding: 14px 28px; border-radius: 30px; font-size: 16px; font-weight: bold; cursor: pointer;
-        box-shadow: 0 4px 15px rgba(255,150,60,0.4); transition: all 0.2s; font-family: inherit; }
-    #feedBtn:hover { transform: scale(1.05); }
-    #feedBtn:active { transform: scale(0.95); }
-    #feedBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .feed-stats { margin-top: 10px; font-size: 12px; color: #aaa; }
-    .feed-stats b { color: #ffcc00; font-family: monospace; }
-    .tooltip { position: fixed; background: rgba(10,14,26,0.95); backdrop-filter: blur(12px);
-        border: 1px solid rgba(100,200,255,0.3); border-radius: 10px; padding: 12px 16px; font-size: 12px;
-        pointer-events: none; z-index: 200; display: none; min-width: 200px; }
-    .tooltip-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
-    .tooltip-species { font-size: 11px; color: #888; font-style: italic; margin-bottom: 8px; }
-    .tooltip-stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
-    .tooltip-label { color: #888; } .tooltip-value { color: #79c0ff; font-family: monospace; }
-    .bar-mini { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; margin-top: 2px; }
-    .bar-mini-fill { height: 100%; border-radius: 2px; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-thumb { background: rgba(100,200,255,0.3); border-radius: 3px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cytophage — Живой мир</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #020409; overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e5e5e5;
+    }
+    #canvas {
+      display: block; width: 100vw; height: 100vh;
+      background: radial-gradient(circle at center, #050814 0%, #010206 60%, #000000 100%);
+      cursor: grab;
+    }
+    #canvas:active { cursor: grabbing; }
+
+    /* ЛЕВАЯ ЧАСТЬ - ОСНОВНАЯ */
+    .left-container {
+      position: fixed; left: 10px; top: 10px; display: flex; flex-direction: column;
+      gap: 10px; max-height: calc(100vh - 20px); width: 580px;
+      overflow-y: auto;
+    }
+
+    .hud {
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.7); border-radius: 8px; font-size: 10px;
+      pointer-events: none; border: 1px solid rgba(46,160,67,0.3);
+      max-height: 160px; overflow-y: auto;
+    }
+
+    .hud-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+    }
+
+    .hud-item {
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+
+    .hud-item .label { color: #8b949e; min-width: 90px; }
+    .hud-item .value { color: #79c0ff; font-weight: 500; }
+
+    .server-row { 
+      display: flex; align-items: center; gap: 6px;
+      grid-column: 1 / -1;
+    }
+    .server-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #6e7681; box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .server-ok { background: #2ea043; box-shadow: 0 0 8px rgba(46,160,67,0.9); }
+    .server-bad { background: #f85149; box-shadow: 0 0 8px rgba(248,81,73,0.9); }
+
+    .events-panel {
+      width: 580px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 9px; max-height: 200px;
+      overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
+    }
+    
+    .hud-panel-title {
+      font-weight: 600; color: #79c0ff; margin-bottom: 6px;
+      position: sticky; top: 0; background: rgba(0, 0, 0, 0.9);
+      padding-bottom: 4px; z-index: 1; border-bottom: 1px solid rgba(46,160,67,0.2);
+    }
+    
+    .event-item {
+      margin-bottom: 4px; padding: 4px 6px; border-left: 2px solid #79c0ff;
+      background: rgba(121,192,255,0.05); border-radius: 2px;
+    }
+    .event-item.war { border-left-color: #ff4444; background: rgba(255,68,68,0.05); }
+    .event-item.death { border-left-color: #888; background: rgba(136,136,136,0.05); }
+    .event-item.birth { border-left-color: #2ea043; background: rgba(46,160,67,0.05); }
+    .event-item.mutation { border-left-color: #9964c8; background: rgba(153,100,200,0.05); }
+    .event-item.kill { border-left-color: #ff6b6b; background: rgba(255,107,107,0.05); }
+    .event-time { color: #8b949e; font-size: 8px; }
+
+    /* ПАНЕЛЬ ДЕТАЛЕЙ БАКТЕРИИ - ЛЕВАЯ ЧАСТЬ */
+    #selectedBacteriumDetail {
+      width: 580px; padding: 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 10px; overflow-y: auto; pointer-events: auto;
+      border: 2px solid rgba(46,160,67,0.5); display: none; max-height: 350px;
+    }
+    
+    .detail-title { 
+      font-weight: 600; color: #2ea043; margin-bottom: 8px; 
+      border-bottom: 2px solid rgba(46,160,67,0.3); padding-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .detail-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+    }
+
+    .detail-row {
+      margin-bottom: 2px; padding-bottom: 2px;
+    }
+    .detail-row .label {
+      color: #8b949e; display: inline-block; min-width: 100px; font-size: 9px;
+    }
+    .detail-row .value {
+      color: #79c0ff; font-weight: 500;
+    }
+
+    .detail-full-width {
+      grid-column: 1 / -1;
+    }
+
+    .skills-block {
+      margin-top: 6px;
+      padding: 6px;
+      background: rgba(46,160,67,0.1);
+      border-radius: 4px;
+      border-left: 2px solid #2ea043;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .mutation-block {
+      margin-top: 6px;
+      padding: 6px;
+      background: rgba(150,100,200,0.1);
+      border-radius: 4px;
+      border-left: 2px solid #9964c8;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: 600;
+      margin-right: 4px;
+      margin-bottom: 2px;
+    }
+
+    .status-leader { background: rgba(255,215,0,0.3); color: #ffd700; }
+    .status-emperor { background: rgba(255,215,0,0.5); color: #ffff00; }
+    .status-successor { background: rgba(255,215,0,0.2); color: #ffd700; }
+    .status-aggressive { background: rgba(255,68,68,0.3); color: #ff4444; }
+    .status-combat { background: rgba(255,68,68,0.2); color: #ff6b6b; }
+
+    /* ПРАВАЯ ЧАСТЬ */
+    .right-container {
+      position: fixed; right: 10px; top: 10px; display: flex; gap: 10px;
+      max-height: calc(100vh - 20px); flex-direction: column;
+    }
+    
+    .hud-panel {
+      width: 320px; padding: 10px 12px; background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px; font-size: 11px; max-height: 60%;
+      overflow-y: auto; pointer-events: auto; border: 1px solid rgba(46,160,67,0.3);
+    }
+    
+    .leader-row {
+      margin-top: 3px; border-bottom: 1px solid rgba(110,118,129,0.2);
+      padding: 4px 10px; cursor: pointer; position: relative; border-radius: 4px;
+    }
+    .leader-row:last-child { border-bottom: none; }
+    .leader-row:hover { background: rgba(56,139,253,0.15); }
+    .row-selected { border: 1px solid #2ea043; background: rgba(46,160,67,0.25); }
+    
+    .leader-main {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 4px; white-space: nowrap;
+    }
+    .leader-name { font-weight: 500; }
+    .leader-clan { color: #8b949e; margin-left: 4px; font-size: 10px; }
+    .leader-info { font-size: 10px; color: #c9d1d9; white-space: nowrap; }
+    .combat-indicator { color: #ff4444; font-weight: 600; }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(46,160,67,0.5);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(46,160,67,0.8);
+    }
+  </style>
 </head>
 <body>
-<canvas id="canvas"></canvas>
+  <canvas id="canvas"></canvas>
 
-<div class="hud-top">
-    <div class="server-status">
-        <div class="status-indicator">
-            <div class="status-dot" id="statusDot"></div>
-            <span id="serverText">Поиск сервера...</span>
+  <!-- ЛЕВАЯ ЧАСТЬ -->
+  <div class="left-container">
+    <div class="hud">
+      <div class="hud-grid">
+        <div class="server-row">
+          <div id="serverDot" class="server-dot"></div>
+          <div id="serverStatusText" style="color: #79c0ff;">Сервер: нет данных</div>
         </div>
-        <div class="ping-display">📡 <span id="pingValue" class="ping-good">---</span>ms</div>
+        <div class="hud-item">
+          <span class="label">🗺️ Карта:</span>
+          <span class="value" id="hudMap">15000x15000</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🦠 Бактерий:</span>
+          <span class="value" id="hudBacteria">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🍖 Еда:</span>
+          <span class="value" id="hudFood">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">❤️ HP еда:</span>
+          <span class="value" id="hudHealthFood" style="color:#ff4444;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">👑 Кланов:</span>
+          <span class="value" id="hudClans">0/15</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">✨ Родилось:</span>
+          <span class="value" id="hudBorn">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">💀 Умерло:</span>
+          <span class="value" id="hudDied">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ Убийств:</span>
+          <span class="value" id="hudKills">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">🧬 Мутаций:</span>
+          <span class="value" id="hudMutations" style="color:#9964c8;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ Войн:</span>
+          <span class="value" id="hudWars" style="color:#ff4444;">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">⚔️ В бою:</span>
+          <span class="value" id="hudInCombat">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">📊 Поколение:</span>
+          <span class="value" id="hudGeneration">0</span>
+        </div>
+      </div>
     </div>
-    <div class="stats-bar">
-        <div class="stat"><span class="stat-label">🐟 Рыб:</span><span class="stat-value" id="fishCount">0</span></div>
-        <div class="stat"><span class="stat-label">👶 Мальков:</span><span class="stat-value" id="fryCount">0</span></div>
-        <div class="stat"><span class="stat-label">🥚 Икры:</span><span class="stat-value" id="eggCount">0</span></div>
-        <div class="stat"><span class="stat-label">🦠 Бактерий:</span><span class="stat-value" id="bacteriaCount">0</span></div>
+
+    <div id="selectedBacteriumDetail">
+      <div class="detail-title">📊 Детали бактерии</div>
+      <div id="detailContent"></div>
     </div>
-    <div class="game-time">📅 День <span id="gameDay">0</span> ⏰ <span id="gameHour">00</span>:00</div>
-</div>
 
-<div class="water-panel">
-    <div class="panel-title">Состояние воды</div>
-    <div class="meter"><div class="meter-label"><span>💧 Кислород</span><span id="oxygenValue">100%</span></div>
-        <div class="meter-bar"><div class="meter-fill oxygen" id="oxygenBar" style="width:100%"></div></div></div>
-    <div class="meter"><div class="meter-label"><span>✨ Качество</span><span id="qualityValue">100%</span></div>
-        <div class="meter-bar"><div class="meter-fill quality" id="qualityBar" style="width:100%"></div></div></div>
-    <div class="meter"><div class="meter-label"><span>🌡️ Температура</span><span id="tempValue">25°C</span></div></div>
-    <div class="meter"><div class="meter-label"><span>⚗️ pH</span><span id="phValue">7.0</span></div></div>
-    <div class="meter" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">
-        <div class="meter-label"><span>⏱️ Аптайм</span><span id="uptimeValue" style="color:#79c0ff;">0м</span></div></div>
-</div>
-
-<div class="species-panel">
-    <div class="panel-title">Виды рыб</div>
-    <div id="speciesContainer"></div>
-</div>
-
-<div class="events-panel">
-    <div class="panel-title">Летопись аквариума</div>
-    <div id="eventsContainer"></div>
-</div>
-
-<div class="feed-panel">
-    <button id="feedBtn">🍞 Покормить рыбок</button>
-    <div class="feed-stats">
-        Кормлений посетителями: <b id="manualFeeds">0</b><br>
-        Авто-кормлений: <b id="autoFeeds">0</b>
+    <div class="events-panel">
+      <div class="hud-panel-title">📜 События</div>
+      <div id="eventsList"></div>
     </div>
-</div>
+  </div>
 
-<div class="tooltip" id="tooltip"></div>
+  <!-- ПРАВАЯ ЧАСТЬ -->
+  <div class="right-container">
+    <div class="hud-panel">
+      <div class="hud-panel-title">👑 Лидеры и кланы</div>
+      <div id="leadersList"></div>
+    </div>
+  </div>
 
-<script>
-const RENDER_URL = "https://cytophage.onrender.com";
-let SERVER_URL = null;
+  <script>
+    const SERVER_URL = "https://cytophage.onrender.com";
 
-async function detectServer() {
-    const candidates = [];
-    if (location.protocol === "http:" || location.protocol === "https:") candidates.push(location.origin);
-    candidates.push("http://localhost:3000");
-    if (!candidates.includes(RENDER_URL)) candidates.push(RENDER_URL);
-    for (const url of candidates) {
-        try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 4000);
-            const res = await fetch(url + "/ping", { cache: "no-cache", signal: ctrl.signal });
-            clearTimeout(t);
-            if (res.ok) { SERVER_URL = url; return true; }
-        } catch (e) {}
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const serverDot = document.getElementById("serverDot");
+    const serverStatusText = document.getElementById("serverStatusText");
+    const leadersListEl = document.getElementById("leadersList");
+    const eventsListEl = document.getElementById("eventsList");
+    const detailPanel = document.getElementById("selectedBacteriumDetail");
+    const detailContent = document.getElementById("detailContent");
+
+    // HUD элементы
+    const hudMap = document.getElementById("hudMap");
+    const hudBacteria = document.getElementById("hudBacteria");
+    const hudFood = document.getElementById("hudFood");
+    const hudHealthFood = document.getElementById("hudHealthFood");
+    const hudClans = document.getElementById("hudClans");
+    const hudBorn = document.getElementById("hudBorn");
+    const hudDied = document.getElementById("hudDied");
+    const hudKills = document.getElementById("hudKills");
+    const hudMutations = document.getElementById("hudMutations");
+    const hudWars = document.getElementById("hudWars");
+    const hudInCombat = document.getElementById("hudInCombat");
+    const hudGeneration = document.getElementById("hudGeneration");
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    window.addEventListener("resize", () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    });
+
+    let world = { width: 15000, height: 15000 };
+    let cameraX = world.width / 2;
+    let cameraY = world.height / 2;
+    let zoom = 0.1;
+
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let cameraStartX = 0;
+    let cameraStartY = 0;
+
+    let lastStats = null;
+    let lastServerOk = false;
+    let serverUptimeSeconds = 0;
+    let uptimeLastFetch = Date.now();
+
+    let bacteriaRaw = [];
+    let foodRaw = [];
+    let healthFoodRaw = [];
+    let eventsRaw = [];
+    const renderPositions = new Map();
+
+    let selectedBacteriumId = null;
+    let lastHudInteractionTime = 0;
+
+    function formatUptime(seconds) {
+      if (!seconds || seconds < 0) return "—";
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+
+      const parts = [];
+      if (days > 0) parts.push(`${days}д`);
+      if (hours > 0) parts.push(`${hours}ч`);
+      if (minutes > 0) parts.push(`${minutes}м`);
+      if (secs > 0 || parts.length === 0) parts.push(`${secs}с`);
+      return parts.join(' ');
     }
-    return false;
-}
 
-async function ensureServer() {
-    while (!SERVER_URL) {
-        if (await detectServer()) {
-            document.getElementById("serverText").textContent = "Сервер онлайн";
-            document.getElementById("statusDot").classList.add("online");
-            startPolling();
+    setInterval(() => {
+      if (lastServerOk && serverUptimeSeconds > 0) {
+        const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
+        const uptime = formatUptime(serverUptimeSeconds + elapsed);
+        serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
+      }
+    }, 1000);
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      cameraStartX = cameraX;
+      cameraStartY = cameraY;
+    });
+
+    window.addEventListener("mouseup", () => {
+      isDragging = false;
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      cameraX = cameraStartX - dx / zoom;
+      cameraY = cameraStartY - dy / zoom;
+    });
+
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      const worldBeforeZoomX = (mouseX - width / 2) / zoom + cameraX;
+      const worldBeforeZoomY = (mouseY - height / 2) / zoom + cameraY;
+
+      if (e.deltaY < 0) {
+        zoom *= zoomFactor;
+      } else {
+        zoom /= zoomFactor;
+      }
+
+      zoom = Math.max(0.02, Math.min(zoom, 2));
+
+      const worldAfterZoomX = (mouseX - width / 2) / zoom + cameraX;
+      const worldAfterZoomY = (mouseY - height / 2) / zoom + cameraY;
+
+      cameraX += worldBeforeZoomX - worldAfterZoomX;
+      cameraY += worldBeforeZoomY - worldAfterZoomY;
+    }, { passive: false });
+
+    function worldToScreen(x, y) {
+      const sx = (x - cameraX) * zoom + width / 2;
+      const sy = (y - cameraY) * zoom + height / 2;
+      return { x: sx, y: sy };
+    }
+
+    function formatAgeLabel(ageYears) {
+      if (ageYears === undefined || isNaN(ageYears)) return "?";
+      if (ageYears < 0.2) return "Новорождённый";
+      if (ageYears < 0.5) return "Малыш";
+      if (ageYears < 1.0) return "Юный";
+
+      const yearsInt = Math.floor(ageYears);
+      const lastTwo = yearsInt % 100;
+      const lastDigit = yearsInt % 10;
+      let word;
+      if (lastTwo >= 11 && lastTwo <= 14) {
+        word = "лет";
+      } else if (lastDigit === 1) {
+        word = "год";
+      } else if (lastDigit >= 2 && lastDigit <= 4) {
+        word = "года";
+      } else {
+        word = "лет";
+      }
+      return yearsInt + " " + word;
+    }
+
+    function getRenderBacteriaList() {
+      const currentIds = new Set(bacteriaRaw.map(b => b.id));
+      for (const id of renderPositions.keys()) {
+        if (!currentIds.has(id)) {
+          renderPositions.delete(id);
+        }
+      }
+
+      const smoothed = [];
+      const alpha = 0.025;
+      const maxStep = 6;
+
+      for (const b of bacteriaRaw) {
+        let rp = renderPositions.get(b.id);
+        if (!rp) {
+          rp = { x: b.x, y: b.y };
+          renderPositions.set(b.id, rp);
         } else {
-            await new Promise(r => setTimeout(r, 5000));
+          let dx = b.x - rp.x;
+          let dy = b.y - rp.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0;
+          if (dist > maxStep) {
+            const k = maxStep / dist;
+            dx *= k;
+            dy *= k;
+          }
+          rp.x += dx * alpha;
+          rp.y += dy * alpha;
         }
+        smoothed.push({ ...b, x: rp.x, y: rp.y });
+      }
+      return smoothed;
     }
-}
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-let worldState = null, pingMs = 0, serverOnline = false;
-let hoveredEntity = null, mouseX = 0, mouseY = 0;
-let scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0;
-let failCount = 0;
-let bgCanvas = null; // ⭐ кэш фона
+    function draw() {
+      const renderBacteria = getRenderBacteriaList();
 
-function resize() { canvas.width = innerWidth; canvas.height = innerHeight; bgCanvas = null; }
-addEventListener("resize", resize);
-resize();
-
-function formatUptime(s) {
-    if (s < 60) return s + "с";
-    if (s < 3600) return Math.floor(s / 60) + "м";
-    return Math.floor(s / 3600) + "ч " + Math.floor((s % 3600) / 60) + "м";
-}
-const SPECIES_ICONS = { guppy: "🐠", neon: "✨", angelfish: "👼", swordtail: "⚔️", corydoras: "🐡", cichlid: "🦈" };
-
-// ===== КОРМЛЕНИЕ =====
-const feedBtn = document.getElementById("feedBtn");
-feedBtn.addEventListener("click", async () => {
-    if (!SERVER_URL) return;
-    feedBtn.disabled = true;
-    try {
-        const res = await fetch(SERVER_URL + "/feed", { method: "POST" });
-        const d = await res.json();
-        if (d.ok) {
-            document.getElementById("manualFeeds").textContent = d.manualFeeds;
-            document.getElementById("autoFeeds").textContent = d.autoFeeds;
+      if (selectedBacteriumId !== null) {
+        const target = renderBacteria.find(b => b.id === selectedBacteriumId);
+        if (target) {
+          const lerp = 0.03;
+          cameraX += (target.x - cameraX) * lerp;
+          cameraY += (target.y - cameraY) * lerp;
+          const maxCamStep = 20;
+          const dcx = target.x - cameraX;
+          const dcy = target.y - cameraY;
+          const camDist = Math.sqrt(dcx * dcx + dcy * dcy) || 0;
+          if (camDist > maxCamStep) {
+            const kk = maxCamStep / camDist;
+            cameraX = target.x - dcx * kk;
+            cameraY = target.y - dcy * kk;
+          }
+        } else {
+          selectedBacteriumId = null;
         }
-    } catch (e) {}
-    setTimeout(() => feedBtn.disabled = false, 1500);
-});
+      }
 
-// ===== ⭐ ОПРОС 500мс + ТАЙМАУТ + ЗАЩИТА ОТ МИГАНИЯ =====
-let polling = false;
-function startPolling() {
-    if (polling) return;
-    polling = true;
-    setInterval(fetchState, 500);
-    fetchState();
-}
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#020409";
+      ctx.fillRect(0, 0, width, height);
 
-async function fetchState() {
-    const start = Date.now();
-    try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(SERVER_URL + "/state", { cache: "no-cache", signal: ctrl.signal });
-        clearTimeout(t);
-        worldState = await res.json();
-        pingMs = Date.now() - start;
-        failCount = 0;
-        if (!serverOnline) {
-            serverOnline = true;
-            document.getElementById("statusDot").classList.add("online");
-            document.getElementById("statusDot").classList.remove("offline");
-            document.getElementById("serverText").textContent = "Сервер онлайн";
-        }
-        updateHUD();
-    } catch (err) {
-        failCount++;
-        // ⭐ офлайн только после 3 неудач подряд
-        if (failCount >= 3 && serverOnline) {
-            serverOnline = false;
-            document.getElementById("statusDot").classList.remove("online");
-            document.getElementById("statusDot").classList.add("offline");
-            document.getElementById("serverText").textContent = "Сервер офлайн";
-        }
-    }
-}
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(120, 255, 120, 0.6)";
+      const topLeft = worldToScreen(0, 0);
+      const bottomRight = worldToScreen(world.width, world.height);
+      const w = bottomRight.x - topLeft.x;
+      const h = bottomRight.y - topLeft.y;
+      ctx.strokeRect(topLeft.x, topLeft.y, w, h);
+      ctx.restore();
 
-function updateHUD() {
-    if (!worldState) return;
-    document.getElementById("fishCount").textContent = worldState.fishes.length;
-    document.getElementById("fryCount").textContent = worldState.fry.length;
-    document.getElementById("eggCount").textContent = worldState.eggs.length;
-    document.getElementById("bacteriaCount").textContent = worldState.bacteria.length;
-    document.getElementById("gameDay").textContent = worldState.gameTime.days;
-    document.getElementById("gameHour").textContent = String(worldState.gameTime.hours).padStart(2, "0");
-
-    const p = document.getElementById("pingValue");
-    p.textContent = pingMs;
-    p.className = pingMs < 100 ? "ping-good" : pingMs < 300 ? "ping-mid" : "ping-bad";
-
-    const env = worldState.environment;
-    document.getElementById("oxygenValue").textContent = Math.round(env.oxygen) + "%";
-    document.getElementById("oxygenBar").style.width = env.oxygen + "%";
-    document.getElementById("qualityValue").textContent = Math.round(env.quality) + "%";
-    document.getElementById("qualityBar").style.width = env.quality + "%";
-    document.getElementById("tempValue").textContent = env.temperature.toFixed(1) + "°C";
-    document.getElementById("phValue").textContent = env.ph.toFixed(1);
-    document.getElementById("uptimeValue").textContent = formatUptime(worldState.stats.serverUptime);
-    document.getElementById("manualFeeds").textContent = worldState.stats.manualFeeds || 0;
-    document.getElementById("autoFeeds").textContent = worldState.stats.autoFeeds || 0;
-
-    const c = document.getElementById("speciesContainer");
-    c.innerHTML = "";
-    for (const [key, st] of Object.entries(worldState.speciesStats)) {
-        if (st.adults + st.fry + st.eggs === 0) continue;
-        const spec = worldState.species[key];
-        const div = document.createElement("div");
-        div.className = "species-item";
-        div.style.borderLeftColor = spec.color.body;
-        div.innerHTML = `<span class="species-icon">${SPECIES_ICONS[key] || "🐟"}</span>
-            <div class="species-info"><div class="species-name">${spec.name}</div>
-            <div class="species-latin">${spec.nameLatin}</div></div>
-            <div class="species-count"><div class="count-adults">🐟 ${st.adults}</div>
-            ${st.fry ? `<div class="count-fry">👶 ${st.fry}</div>` : ""}
-            ${st.eggs ? `<div class="count-eggs">🥚 ${st.eggs}</div>` : ""}</div>`;
-        c.appendChild(div);
-    }
-
-    const ev = document.getElementById("eventsContainer");
-    ev.innerHTML = "";
-    for (const e of [...worldState.events].reverse().slice(0, 20)) {
-        const div = document.createElement("div");
-        div.className = "event " + e.type;
-        div.innerHTML = `<span class="event-time">Д${e.gameDay}</span>${e.message}`;
-        ev.appendChild(div);
-    }
-}
-
-// ===== ОТРИСОВКА =====
-function updateScale() {
-    const W = worldState.config.aquarium.width, H = worldState.config.aquarium.height;
-    const s = Math.min((canvas.width - 40) / W, (canvas.height - 120) / H);
-    scaleX = scaleY = s;
-    offsetX = (canvas.width - W * s) / 2;
-    offsetY = 60 + (canvas.height - 120 - H * s) / 2;
-}
-function toScreen(x, y) { return { x: offsetX + x * scaleX, y: offsetY + y * scaleY }; }
-
-// ⭐ кэш статичного фона (вода, песок, камни)
-function buildBackground() {
-    bgCanvas = document.createElement("canvas");
-    bgCanvas.width = canvas.width; bgCanvas.height = canvas.height;
-    const b = bgCanvas.getContext("2d");
-    const tl = toScreen(0, 0), br = toScreen(worldState.config.aquarium.width, worldState.config.aquarium.height);
-    const aqW = br.x - tl.x, aqH = br.y - tl.y;
-
-    b.strokeStyle = "#1a2a3a"; b.lineWidth = 4;
-    b.strokeRect(tl.x - 4, tl.y - 4, aqW + 8, aqH + 8);
-
-    const wg = b.createLinearGradient(tl.x, tl.y, tl.x, br.y);
-    wg.addColorStop(0, "rgba(20,60,100,0.9)");
-    wg.addColorStop(0.3, "rgba(15,50,80,0.95)");
-    wg.addColorStop(1, "rgba(10,30,50,1)");
-    b.fillStyle = wg; b.fillRect(tl.x, tl.y, aqW, aqH);
-
-    const sandY = br.y - 80 * scaleY;
-    const sg = b.createLinearGradient(tl.x, sandY, tl.x, br.y);
-    sg.addColorStop(0, "#8B7355"); sg.addColorStop(0.3, "#6B5B45"); sg.addColorStop(1, "#4a3f30");
-    b.fillStyle = sg; b.fillRect(tl.x, sandY, aqW, 80 * scaleY + 5);
-    b.fillStyle = "rgba(255,255,255,0.05)";
-    for (let i = 0; i < 200; i++) b.fillRect(tl.x + (i * 7 + 3) % aqW, sandY + (i * 13 + 5) % (80 * scaleY), 1, 1);
-
-    for (const rock of worldState.rocks) {
-        const p = toScreen(rock.x, rock.y);
-        b.fillStyle = rock.color;
-        b.beginPath(); b.ellipse(p.x, p.y, rock.width * scaleX / 2, rock.height * scaleY / 2, 0, 0, Math.PI * 2); b.fill();
-        b.fillStyle = "rgba(255,255,255,0.1)";
-        b.beginPath(); b.ellipse(p.x - rock.width * 0.15 * scaleX, p.y - rock.height * 0.15 * scaleY, rock.width * 0.15 * scaleX, rock.height * 0.1 * scaleY, -0.3, 0, Math.PI * 2); b.fill();
-    }
-}
-
-function draw() {
-    requestAnimationFrame(draw);
-    if (!worldState) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
-    updateScale();
-    if (!bgCanvas) buildBackground();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bgCanvas, 0, 0);
-
-    const tl = toScreen(0, 0), br = toScreen(worldState.config.aquarium.width, worldState.config.aquarium.height);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y); ctx.clip();
-
-    // Растения (динамические)
-    const time = Date.now() * 0.001;
-    for (const plant of worldState.plants) drawPlant(plant, time);
-
-    // ⭐ ПАКЕТНАЯ отрисовка корма
-    ctx.fillStyle = "#D4A574";
-    ctx.beginPath();
-    for (const f of worldState.food) {
-        const p = toScreen(f.x, f.y);
-        const s = f.size * scaleX;
-        ctx.moveTo(p.x + s, p.y);
-        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
-    }
-    ctx.fill();
-
-    // ⭐ ПАКЕТНАЯ отрисовка икры
-    ctx.fillStyle = "rgba(255,255,200,0.8)";
-    ctx.beginPath();
-    for (const egg of worldState.eggs) {
-        const p = toScreen(egg.x, egg.y);
-        const s = Math.max(1.5, egg.size * scaleX);
-        ctx.moveTo(p.x + s, p.y);
-        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
-    }
-    ctx.fill();
-
-    for (const c of worldState.corpses) drawCorpse(c);
-
-    ctx.fillStyle = "rgba(100,255,100,0.4)";
-    ctx.beginPath();
-    for (const b of worldState.bacteria) {
-        const p = toScreen(b.x, b.y);
-        ctx.moveTo(p.x + 1.5, p.y);
-        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-    }
-    ctx.fill();
-
-    for (const fry of worldState.fry) drawFry(fry);
-    hoveredEntity = null;
-    for (const fish of worldState.fishes) drawFish(fish);
-
-    // Пузырьки пакетно
-    ctx.fillStyle = "rgba(200,230,255,0.3)";
-    ctx.beginPath();
-    for (const b of worldState.bubbles) {
-        const p = toScreen(b.x, b.y);
-        const s = b.size * scaleX;
-        ctx.moveTo(p.x + s, p.y);
-        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
-    }
-    ctx.fill();
-
-    ctx.restore();
-
-    if (hoveredEntity) drawTooltip(hoveredEntity);
-    else document.getElementById("tooltip").style.display = "none";
-}
-
-function drawPlant(plant, time) {
-    const base = toScreen(plant.x, plant.baseY);
-    const sway = Math.sin(time * 0.5 + plant.swayOffset) * 8 * scaleX;
-    const height = plant.height * scaleX;
-
-    ctx.strokeStyle = "#2d5016"; ctx.lineWidth = 3 * scaleX;
-    ctx.beginPath(); ctx.moveTo(base.x, base.y);
-    let px = base.x, py = base.y;
-    for (let i = 1; i <= 8; i++) {
-        const t = i / 8;
-        px = base.x + sway * t * t;
-        py = base.y - (height / 8) * i;
-        ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = "#3a8025";
-    for (let i = 0; i < plant.leaves; i++) {
-        const t = (i + 1) / (plant.leaves + 1);
-        const lx = base.x + sway * t * t, ly = base.y - height * t;
-        const ls = 25 * scaleX * (1 - t * 0.3);
-        ctx.save();
-        ctx.translate(lx, ly);
-        ctx.rotate((i % 2 === 0 ? 1 : -1) * 0.5 + Math.sin(time * 0.8 + i) * 0.1);
+      ctx.save();
+      for (const f of foodRaw) {
+        const p = worldToScreen(f.x, f.y);
+        if (p.x < -20 || p.y < -20 || p.x > width + 20 || p.y > height + 20) continue;
+        const r = 1.2 * zoom;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.bezierCurveTo(ls * 0.3, -ls * 0.2, ls * 0.8, -ls * 0.1, ls, 0);
-        ctx.bezierCurveTo(ls * 0.8, ls * 0.1, ls * 0.3, ls * 0.2, 0, 0);
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "hsl(120, 100%, 70%)";
         ctx.fill();
-        ctx.restore();
-    }
-}
+      }
+      ctx.restore();
 
-function drawFish(fish) {
-    const pos = toScreen(fish.x, fish.y);
-    const size = fish.size * scaleX;
-    const spec = worldState.species[fish.species];
-    const dir = fish.facingRight ? 1 : -1;
+      ctx.save();
+      for (const hf of healthFoodRaw) {
+        const p = worldToScreen(hf.x, hf.y);
+        if (p.x < -20 || p.y < -20 || p.x > width + 20 || p.y > height + 20) continue;
+        const r = 2 * zoom;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 0, 0, 0.9)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 100, 100, 0.9)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.restore();
 
-    const dx = mouseX - pos.x, dy = mouseY - pos.y;
-    if (dx * dx + dy * dy < (size + 10) * (size + 10)) hoveredEntity = { type: "fish", data: fish };
+      ctx.save();
+      for (const leader of renderBacteria) {
+        if (!leader.isLeader) continue;
+        const fid = leader.familyId || 0;
+        if (!fid) continue;
 
-    ctx.save();
-    ctx.translate(pos.x, pos.y + Math.sin(fish.swimPhase || 0) * size * 0.05);
-    ctx.scale(dir, 1);
+        const radiusWorld = leader.clanRadius || 40;
+        const p = worldToScreen(leader.x, leader.y);
+        const radius = radiusWorld * zoom;
+        if (p.x < -radius || p.y < -radius || p.x > width + radius || p.y > height + radius) continue;
 
-    const wag = Math.sin((fish.swimPhase || 0) * 2) * 0.3;
-    ctx.fillStyle = spec.color.tail || spec.color.body;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.5, 0);
-    ctx.lineTo(-size * 1.2 + Math.cos(wag) * size * 0.15, -size * 0.5);
-    ctx.quadraticCurveTo(-size, 0, -size * 1.2 + Math.cos(wag) * size * 0.15, size * 0.5);
-    ctx.closePath(); ctx.fill();
+        const c = leader.familyColor || "#58a6ff";
 
-    ctx.fillStyle = spec.color.body;
-    ctx.beginPath();
-    if (fish.species === "angelfish") {
-        ctx.moveTo(size * 0.7, 0);
-        ctx.quadraticCurveTo(size * 0.3, -size * 0.8, 0, -size);
-        ctx.quadraticCurveTo(-size * 0.3, -size * 0.8, -size * 0.5, 0);
-        ctx.quadraticCurveTo(-size * 0.3, size * 0.8, 0, size);
-        ctx.quadraticCurveTo(size * 0.3, size * 0.8, size * 0.7, 0);
-    } else ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
-    ctx.fill();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
 
-    if (spec.color.stripe) {
-        ctx.fillStyle = spec.color.stripe; ctx.globalAlpha = 0.7;
-        ctx.beginPath(); ctx.ellipse(0, 0, size * 0.7, size * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = c;
+        ctx.lineWidth = Math.max(1, 1.5 * zoom);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
         ctx.globalAlpha = 1;
-    }
-    if (spec.color.stripes && fish.species === "angelfish") {
-        ctx.strokeStyle = spec.color.stripes; ctx.lineWidth = size * 0.06;
-        for (let i = -1; i <= 1; i++) {
-            ctx.beginPath(); ctx.moveTo(i * size * 0.2, -size * 0.5); ctx.lineTo(i * size * 0.2, size * 0.5); ctx.stroke();
-        }
-    }
-    if (spec.color.spots && fish.species === "cichlid") {
-        ctx.fillStyle = spec.color.spots;
+      }
+      ctx.restore();
+
+      ctx.save();
+      for (const b of renderBacteria) {
+        const p = worldToScreen(b.x, b.y);
+        if (p.x < -80 || p.y < -80 || p.x > width + 80 || p.y > height + 80) continue;
+
+        const radius = Math.max(2, b.size * zoom);
+
         ctx.beginPath();
-        ctx.arc(size * 0.3, -size * 0.1, size * 0.12, 0, Math.PI * 2);
-        ctx.arc(-size * 0.1, size * 0.15, size * 0.1, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        
+        ctx.fillStyle = b.familyColor || "#58a6ff";
+        
+        ctx.shadowBlur = radius * 1.5;
+        ctx.shadowColor = ctx.fillStyle;
         ctx.fill();
-    }
-    if (spec.hasSword && fish.gender === "male") {
-        ctx.fillStyle = spec.color.sword || "#FFD700";
-        ctx.beginPath();
-        ctx.moveTo(-size * 1.1, 0); ctx.lineTo(-size * 2, size * 0.15); ctx.lineTo(-size * 1.1, size * 0.05);
-        ctx.closePath(); ctx.fill();
-    }
+        ctx.shadowBlur = 0;
 
-    ctx.fillStyle = spec.color.tail || spec.color.body;
-    ctx.globalAlpha = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.1, -size * 0.35);
-    ctx.quadraticCurveTo(size * 0.1, -size * 0.7, size * 0.3, -size * 0.4);
-    ctx.quadraticCurveTo(size * 0.2, -size * 0.35, -size * 0.1, -size * 0.35);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(0, size * 0.35);
-    ctx.quadraticCurveTo(size * 0.15, size * 0.6, size * 0.25, size * 0.4);
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
+        if (b.isEmperor) {
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(255, 215, 0, 0.95)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 5, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (b.isLeader) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
-    ctx.fillStyle = "#FFF";
-    ctx.beginPath(); ctx.arc(size * 0.45, -size * 0.08, size * 0.12, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#000";
-    ctx.beginPath(); ctx.arc(size * 0.47, -size * 0.08, size * 0.07, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#FFF";
-    ctx.beginPath(); ctx.arc(size * 0.49, -size * 0.1, size * 0.03, 0, Math.PI * 2); ctx.fill();
+        if (b.isSuccessor) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 215, 0, 0.9)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        
+        if (b.isAggressive) {
+          ctx.shadowBlur = radius * 3;
+          ctx.shadowColor = "rgba(255, 0, 0, 0.9)";
+          ctx.strokeStyle = "rgba(255, 0, 0, 0.95)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
 
-    if (fish.pregnant) {
-        ctx.fillStyle = "rgba(255,100,200,0.4)";
-        ctx.beginPath(); ctx.arc(-size * 0.1, size * 0.1, size * 0.25, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
+        if (selectedBacteriumId === b.id) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(46, 160, 67, 0.95)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
-    if (fish.hp < 100) {
-        const bw = size * 1.5, bx = pos.x - bw / 2, by = pos.y - size - 10;
-        const pct = Math.max(0, fish.hp / 100);
-        ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, bw, 4);
-        ctx.fillStyle = pct > 0.5 ? "#00ff88" : pct > 0.25 ? "#ffcc00" : "#ff4444";
-        ctx.fillRect(bx, by, bw * pct, 4);
-    }
-    if (size > 10) {
-        ctx.fillStyle = "rgba(255,255,255,0.7)";
-        ctx.font = Math.max(8, size * 0.3) + "px 'Segoe UI'";
+        const barWidth = radius * 2.6;
+        const barHeight = 3;
+        const barX = p.x - barWidth / 2;
+        const barY = p.y - radius - 14;
+
+        ctx.fillStyle = "rgba(80, 80, 80, 0.6)";
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        const hpRatio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+        ctx.fillStyle = hpRatio > 0.5 ? "rgba(255, 99, 71, 0.9)" : "rgba(200, 40, 40, 0.95)";
+        ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
+
+        const barY2 = barY + 5;
+        ctx.fillStyle = "rgba(80, 80, 80, 0.6)";
+        ctx.fillRect(barX, barY2, barWidth, barHeight);
+
+        const hungerRatio = Math.max(0, Math.min(1, b.hunger / b.maxHunger));
+        ctx.fillStyle = hungerRatio > 0.3 ? "rgba(144, 238, 144, 0.9)" : "rgba(255, 99, 71, 0.95)";
+        ctx.fillRect(barX, barY2, barWidth * hungerRatio, barHeight);
+
         ctx.textAlign = "center";
-        ctx.fillText(fish.name, pos.x, pos.y - size - 12);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "10px system-ui";
+        if (b.isLeader) {
+          const label = b.isEmperor ? `👑 ${b.name}` : b.name;
+          ctx.fillText(label, p.x, barY - 5);
+        }
+      }
+      ctx.restore();
+
+      requestAnimationFrame(draw);
     }
-}
 
-function drawFry(fry) {
-    const pos = toScreen(fry.x, fry.y);
-    const size = fry.size * scaleX;
-    const dx = mouseX - pos.x, dy = mouseY - pos.y;
-    if (dx * dx + dy * dy < (size + 8) * (size + 8)) hoveredEntity = { type: "fry", data: fry };
+    function updateLeftHud() {
+      const count = bacteriaRaw.length;
+      const foodCount = foodRaw.length;
+      const healthFoodCount = healthFoodRaw.length;
 
-    ctx.save();
-    ctx.translate(pos.x, pos.y);
-    ctx.scale(fry.facingRight ? 1 : -1, 1);
-    ctx.fillStyle = "rgba(255,255,200,0.7)";
-    ctx.beginPath(); ctx.ellipse(0, 0, size * 0.6, size * 0.3, 0, 0, Math.PI * 2); ctx.fill();
-    const spec = worldState.species[fry.species];
-    ctx.fillStyle = spec.color.body; ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.5, 0); ctx.lineTo(-size, -size * 0.25); ctx.lineTo(-size, size * 0.25);
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#000";
-    ctx.beginPath(); ctx.arc(size * 0.3, -size * 0.05, size * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-}
+      let maxGeneration = 0;
+      let maxAge = 0;
+      let emperorCount = 0;
+      let inCombatCount = 0;
+      for (const b of bacteriaRaw) {
+        if (b.generation > maxGeneration) maxGeneration = b.generation;
+        if (b.ageYears !== undefined && b.ageYears > maxAge) maxAge = b.ageYears;
+        if (b.isEmperor) emperorCount++;
+        if (b.isInCombat) inCombatCount++;
+      }
 
-function drawCorpse(c) {
-    const pos = toScreen(c.x, c.y);
-    const size = c.size * scaleX;
-    const d = c.decomposition / 100;
-    ctx.save();
-    ctx.translate(pos.x, pos.y);
-    ctx.scale(c.facingRight ? 1 : -1, -1);
-    ctx.globalAlpha = 1 - d * 0.5;
-    const g = Math.floor(200 - d * 100);
-    ctx.fillStyle = `rgb(${g},${g},${g})`;
-    ctx.beginPath(); ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = `rgb(${Math.max(0,g-30)},${Math.max(0,g-30)},${Math.max(0,g-30)})`;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.5, 0); ctx.lineTo(-size, -size * 0.3); ctx.lineTo(-size, size * 0.3);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(size * 0.4, -size * 0.15); ctx.lineTo(size * 0.55, 0);
-    ctx.moveTo(size * 0.55, -size * 0.15); ctx.lineTo(size * 0.4, 0);
-    ctx.stroke();
-    ctx.restore();
-}
+      const totalBorn = lastStats ? lastStats.totalBorn : 0;
+      const totalDied = lastStats ? lastStats.totalDied : 0;
+      const totalKills = lastStats ? lastStats.totalKills : 0;
+      const totalMutations = lastStats ? lastStats.totalMutations : 0;
+      const totalWars = lastStats ? lastStats.totalWars : 0;
+      const activeClans = lastStats ? lastStats.activeClans : 0;
 
-function drawTooltip(entity) {
-    const tooltip = document.getElementById("tooltip");
-    let html = "";
-    if (entity.type === "fish") {
-        const f = entity.data, spec = worldState.species[f.species];
-        html = `<div class="tooltip-name" style="color:${spec.color.body}">${f.name} ${f.gender === "male" ? "♂" : "♀"}</div>
-            <div class="tooltip-species">${spec.name} (${spec.nameLatin})</div>
-            <div class="tooltip-stats">
-                <span class="tooltip-label">Поколение:</span><span class="tooltip-value">gen ${f.generation}</span>
-                <span class="tooltip-label">Возраст:</span><span class="tooltip-value">${Math.floor(f.age)} / ${f.lifespan} дн.</span>
-                <span class="tooltip-label">Размер:</span><span class="tooltip-value">${f.size.toFixed(1)} мм</span>
-            </div>
-            <div style="margin-top:8px;font-size:11px;color:#888;">Энергия: ${Math.round(f.energy)}%</div>
-            <div class="bar-mini"><div class="bar-mini-fill" style="width:${Math.max(0,f.energy)}%;background:#ffcc00"></div></div>
-            <div style="font-size:11px;color:#888;">HP: ${Math.round(f.hp)}%</div>
-            <div class="bar-mini"><div class="bar-mini-fill" style="width:${Math.max(0,f.hp)}%;background:#00ff88"></div></div>
-            ${f.pregnant ? `<div style="margin-top:6px;color:#ff69b4">🤰 Беременна (${Math.floor(f.gestationLeft)} дн.)</div>` : ""}`;
-    } else {
-        const f = entity.data, spec = worldState.species[f.species];
-        html = `<div class="tooltip-name" style="color:#98fb98">👶 ${f.name}</div>
-            <div class="tooltip-species">Малёк ${spec.name}</div>
-            <div class="tooltip-stats">
-                <span class="tooltip-label">Поколение:</span><span class="tooltip-value">gen ${f.generation}</span>
-                <span class="tooltip-label">Возраст:</span><span class="tooltip-value">${Math.floor(f.growthDays)} дн.</span>
-            </div>`;
+      hudMap.textContent = `${world.width}x${world.height}`;
+      hudBacteria.textContent = count;
+      hudFood.textContent = foodCount;
+      hudHealthFood.textContent = healthFoodCount;
+      hudClans.textContent = `${activeClans}/15`;
+      hudClans.style.color = activeClans >= 15 ? '#ff4444' : '#79c0ff';
+      hudBorn.textContent = totalBorn;
+      hudDied.textContent = totalDied;
+      hudKills.textContent = totalKills;
+      hudMutations.textContent = totalMutations;
+      hudWars.textContent = totalWars;
+      hudInCombat.textContent = inCombatCount;
+      hudInCombat.style.color = inCombatCount > 0 ? '#ff4444' : '#79c0ff';
+      hudGeneration.textContent = Math.floor(maxGeneration);
     }
-    tooltip.innerHTML = html;
-    tooltip.style.display = "block";
-    tooltip.style.left = (mouseX + 20) + "px";
-    tooltip.style.top = (mouseY - 10) + "px";
-    const r = tooltip.getBoundingClientRect();
-    if (r.right > innerWidth) tooltip.style.left = (mouseX - r.width - 10) + "px";
-    if (r.bottom > innerHeight) tooltip.style.top = (mouseY - r.height) + "px";
-}
 
-canvas.addEventListener("mousemove", e => { mouseX = e.clientX; mouseY = e.clientY; });
+    function updateRightHud() {
+      if (!bacteriaRaw || bacteriaRaw.length === 0) {
+        leadersListEl.innerHTML = "<div class='leader-info'>Пока нет бактерий</div>";
+        return;
+      }
 
-ensureServer();
-requestAnimationFrame(draw);
-</script>
+      const clanSize = new Map();
+      for (const b of bacteriaRaw) {
+        const id = b.familyId || 0;
+        clanSize.set(id, (clanSize.get(id) || 0) + 1);
+      }
+
+      const leaders = [];
+      const successors = [];
+      const others = [];
+      for (const b of bacteriaRaw) {
+        if (b.isLeader) leaders.push(b);
+        else if (b.isSuccessor) successors.push(b);
+        else others.push(b);
+      }
+
+      const byAgeDesc = (a, b) => {
+        const aa = a.ageYears || 0;
+        const bb = b.ageYears || 0;
+        return bb - aa;
+      };
+
+      leaders.sort(byAgeDesc);
+      successors.sort(byAgeDesc);
+      others.sort(byAgeDesc);
+      const all = leaders.concat(successors).concat(others).slice(0, 20);
+
+      let html = "";
+      let index = 1;
+      for (const b of all) {
+        const ageLabel = formatAgeLabel(b.ageYears);
+        const size = clanSize.get(b.familyId || 0) || 1;
+        const leaderMark = b.isEmperor ? " 👑⭐" : (b.isLeader ? " ⭐" : (b.isSuccessor ? " 👑" : ""));
+        const combatMark = b.isInCombat ? ' <span class="combat-indicator">⚔️</span>' : '';
+        const selectedClass = (selectedBacteriumId === b.id) ? " row-selected" : "";
+        const hp = Math.round(b.hp ?? 100);
+        const maxHp = Math.round(b.maxHp ?? 100);
+        const strength = Math.round(b.strength ?? 10);
+        
+        html += `<div class="leader-row${selectedClass}" data-id="${b.id}">
+          <div class="leader-main">
+            <span class="leader-name" style="color: ${b.familyColor || "#58a6ff"};">${index}. ${b.name}${leaderMark}${combatMark}</span>
+          </div>
+          <div class="leader-info">
+            ${b.familyName} · Возраст: ${ageLabel} · В клане: ${size}<br>
+            HP: ${hp}/${maxHp} · Сила: ${strength} · Опыт: ${Math.round(b.experience)}
+          </div>
+        </div>`;
+        index++;
+      }
+
+      leadersListEl.innerHTML = html;
+    }
+
+    function updateEventsPanel() {
+      if (!eventsRaw || eventsRaw.length === 0) {
+        eventsListEl.innerHTML = "<div class='event-item'>Нет событий</div>";
+        return;
+      }
+
+      let html = "";
+      const recentEvents = eventsRaw.slice(-20).reverse();
+      
+      for (const event of recentEvents) {
+        const eventClass = event.type || 'info';
+        const time = new Date(event.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        html += `<div class="event-item ${eventClass}">
+          <div>${event.message}</div>
+          <div class="event-time">${time}</div>
+        </div>`;
+      }
+
+      eventsListEl.innerHTML = html;
+    }
+
+    function updateDetailPanel(b) {
+      if (!b) {
+        detailPanel.style.display = "none";
+        detailContent.innerHTML = "";
+        return;
+      }
+
+      const ageYears = b.ageYears ?? 0;
+      const ageLabel = formatAgeLabel(ageYears);
+      const sizePoints = b.sizePoints ?? b.size ?? 0;
+      const maxSizePoints = b.maxSizePoints ?? 1000;
+      const hunger = Math.round(b.hunger ?? 0);
+      const maxHunger = b.maxHunger ?? 100;
+      const childrenAlive = b.childrenAlive ?? 0;
+      const childrenDead = b.childrenDead ?? 0;
+
+      const isLeader = !!b.isLeader;
+      const isSuccessor = !!b.isSuccessor;
+      const isEmperor = !!b.isEmperor;
+      const isAggressive = !!b.isAggressive;
+      const isInCombat = !!b.isInCombat;
+      
+      let statusHtml = '';
+      if (isEmperor) {
+        statusHtml += '<span class="status-badge status-emperor">ВЕЛИКИЙ ИМПЕРАТОР 👑⭐</span>';
+      } else if (isLeader) {
+        statusHtml += '<span class="status-badge status-leader">ЛИДЕР ⭐</span>';
+      }
+      if (isSuccessor) {
+        statusHtml += '<span class="status-badge status-successor">Преемник 👑</span>';
+      }
+      if (isAggressive) {
+        statusHtml += '<span class="status-badge status-aggressive">АГРЕССИВЕН ⚔️</span>';
+      }
+      if (isInCombat) {
+        statusHtml += '<span class="status-badge status-combat">В БОЮ ⚔️</span>';
+      }
+
+      const clanName = b.familyName || "Нет";
+      const clanColor = b.familyColor || "#58a6ff";
+      const clanRadius = b.isLeader && b.clanRadius ? Math.round(b.clanRadius) : "—";
+
+      const hp = Math.round(b.hp ?? 100);
+      const maxHp = Math.round(b.maxHp ?? 100);
+      const strength = Math.round(b.strength ?? 10);
+      const intelligence = Math.round(b.intelligence ?? 10);
+      const experience = Math.round(b.experience ?? 0);
+      const totalKills = b.totalKills ?? 0;
+      const totalFood = b.totalFood ?? 0;
+      
+      const skills = b.learnedSkills || { hunting: 1, combat: 1, survival: 1 };
+      const skillsHtml = `<div class="skills-block">🎯 Охота: ${skills.hunting}/10 | ⚔️ Бой: ${skills.combat}/10 | 🛡️ Выживание: ${skills.survival}/10</div>`;
+      
+      const damageEstimate = `${1 + Math.floor(strength / 20)}-${5 + Math.floor(strength / 20)}`;
+      
+      let inventoryHtml = "";
+      if (isLeader) {
+        const inventory = Math.round(b.inventory ?? 0);
+        const maxInventory = Math.round(b.maxInventory ?? 50);
+        inventoryHtml = `<div class="detail-row"><span class="label">📦 Инвентарь:</span> <span class="value">${inventory} / ${maxInventory}</span></div>`;
+      }
+
+      const mutations = b.mutations || { strength: 1, hp: 1, speed: 1, vision: 1 };
+      const hasMutations = mutations.strength !== 1 || mutations.hp !== 1 || mutations.speed !== 1 || mutations.vision !== 1;
+      let mutationHtml = "";
+      if (hasMutations) {
+        mutationHtml = `<div class="mutation-block">
+          🧬 <strong>Мутации:</strong><br>
+          Сила: ${mutations.strength.toFixed(2)}x | HP: ${mutations.hp.toFixed(2)}x<br>
+          Скорость: ${mutations.speed.toFixed(2)}x | Зрение: ${mutations.vision.toFixed(2)}x
+        </div>`;
+      }
+
+      detailContent.innerHTML = `
+        <div style="margin-bottom: 8px;">${statusHtml}</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span class="label">Имя:</span> <span class="value" style="color:${clanColor}; font-weight:500;">${b.name}</span></div>
+          <div class="detail-row"><span class="label">Клан:</span> <span class="value" style="color:${clanColor};">${clanName}</span></div>
+          <div class="detail-row"><span class="label">Возраст:</span> <span class="value">${ageLabel}</span></div>
+          <div class="detail-row"><span class="label">Поколение:</span> <span class="value">${Math.floor(b.generation || 0)}</span></div>
+          <div class="detail-row"><span class="label">❤️ HP:</span> <span class="value">${hp} / ${maxHp}</span></div>
+          <div class="detail-row"><span class="label">💪 Сила:</span> <span class="value">${strength}</span></div>
+          <div class="detail-row"><span class="label">⚔️ Урон:</span> <span class="value">${damageEstimate}</span></div>
+          <div class="detail-row"><span class="label">🧠 Интеллект:</span> <span class="value">${intelligence}</span></div>
+          <div class="detail-row"><span class="label">⭐ Опыт:</span> <span class="value">${experience}</span></div>
+          <div class="detail-row"><span class="label">🍖 Голод:</span> <span class="value">${hunger}/${maxHunger}</span></div>
+          <div class="detail-row"><span class="label">📏 Размер:</span> <span class="value">${Math.round(sizePoints)}/${maxSizePoints}</span></div>
+          ${inventoryHtml}
+          <div class="detail-row"><span class="label">⚔️ Убийств:</span> <span class="value">${totalKills}</span></div>
+          <div class="detail-row"><span class="label">🍖 Еды:</span> <span class="value">${totalFood}</span></div>
+          <div class="detail-row"><span class="label">👶 Потомки:</span> <span class="value">Живы ${childrenAlive} - Умерли ${childrenDead}</span></div>
+          <div class="detail-row"><span class="label">📍 Координаты:</span> <span class="value">X: ${Math.round(b.x)}, Y: ${Math.round(b.y)}</span></div>
+          <div class="detail-row detail-full-width">${skillsHtml}</div>
+          ${mutationHtml ? `<div class="detail-row detail-full-width">${mutationHtml}</div>` : ''}
+        </div>
+      `;
+      detailPanel.style.display = "block";
+    }
+
+    leadersListEl.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest(".leader-row");
+      if (!row) return;
+      lastHudInteractionTime = Date.now();
+      const idStr = row.getAttribute("data-id");
+      const id = parseInt(idStr, 10);
+      if (!Number.isFinite(id)) return;
+
+      if (selectedBacteriumId === id) {
+        selectedBacteriumId = null;
+        updateDetailPanel(null);
+      } else {
+        selectedBacteriumId = id;
+        const b = bacteriaRaw.find(b => b.id === id);
+        updateDetailPanel(b || null);
+      }
+      updateRightHud();
+    });
+
+    async function fetchState() {
+      try {
+        const res = await fetch(SERVER_URL + "/state", { cache: "no-cache" });
+        const data = await res.json();
+        world = data.world || world;
+
+        bacteriaRaw = data.bacteria || [];
+        foodRaw = data.food || [];
+        healthFoodRaw = data.healthFood || [];
+        eventsRaw = data.events || [];
+        lastStats = data.stats || null;
+
+        if (!lastServerOk) {
+          lastServerOk = true;
+          serverDot.classList.remove("server-bad");
+          serverDot.classList.add("server-ok");
+        }
+        
+        if (serverUptimeSeconds > 0) {
+          const elapsed = Math.floor((Date.now() - uptimeLastFetch) / 1000);
+          const uptime = formatUptime(serverUptimeSeconds + elapsed);
+          serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
+        } else {
+          serverStatusText.textContent = "Сервер: работает";
+        }
+
+        updateLeftHud();
+        updateEventsPanel();
+        
+        const now = Date.now();
+        if (now - lastHudInteractionTime > 900) {
+          updateRightHud();
+        }
+
+        if (selectedBacteriumId !== null) {
+          const b = bacteriaRaw.find(b => b.id === selectedBacteriumId);
+          if (b) {
+            updateDetailPanel(b);
+          } else {
+            selectedBacteriumId = null;
+            updateDetailPanel(null);
+          }
+        } else {
+          updateDetailPanel(null);
+        }
+      } catch (err) {
+        console.error("Ошибка fetchState:", err);
+        lastServerOk = false;
+        serverDot.classList.remove("server-ok");
+        serverDot.classList.add("server-bad");
+        serverStatusText.textContent = "Сервер: нет связи";
+      }
+    }
+
+    async function fetchUptime() {
+      try {
+        const res = await fetch(SERVER_URL + "/ping", { cache: "no-cache" });
+        const data = await res.json();
+        if (data.uptime !== undefined) {
+          serverUptimeSeconds = data.uptime;
+          uptimeLastFetch = Date.now();
+          const uptime = formatUptime(serverUptimeSeconds);
+          if (lastServerOk) {
+            serverStatusText.innerHTML = `Сервер: работает <span style="color: #79c0ff;">· ${uptime}</span>`;
+          }
+        }
+      } catch (err) {
+        // Игнорируем ошибки uptime
+      }
+    }
+
+    setInterval(fetchUptime, 10000);
+    setInterval(fetchState, 120);
+
+    fetchState();
+    fetchUptime();
+    requestAnimationFrame(draw);
+  </script>
 </body>
 </html>
