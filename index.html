@@ -1,1160 +1,670 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🐠 Аквариум — Живая экосистема</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐠 Аквариум — Живая экосистема</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0e1a; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; height: 100vh; color: #e0e0e0; }
+    #canvas { display: block; cursor: crosshair; }
 
-        body {
-            background: #0a0e1a;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-            height: 100vh;
-            color: #e0e0e0;
-        }
+    .hud-top { position: fixed; top: 0; left: 0; right: 0; padding: 10px 20px;
+        background: linear-gradient(180deg, rgba(10,14,26,0.95), rgba(10,14,26,0.8));
+        backdrop-filter: blur(12px); display: flex; align-items: center;
+        justify-content: space-between; z-index: 100; border-bottom: 1px solid rgba(100,200,255,0.2); flex-wrap: wrap; gap: 8px; }
 
-        #canvas {
-            display: block;
-            cursor: crosshair;
-        }
+    .server-status { display: flex; align-items: center; gap: 10px; }
+    .status-indicator { display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+        background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; transition: all 0.3s; }
+    .status-dot.online { background: #00ff88; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
+    .status-dot.offline { background: #ff4444; box-shadow: 0 0 8px #ff4444; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-        /* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */
-        .hud-top {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            padding: 10px 20px;
-            background: linear-gradient(180deg, rgba(10,14,26,0.95) 0%, rgba(10,14,26,0.8) 100%);
-            backdrop-filter: blur(12px);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            z-index: 100;
-            border-bottom: 1px solid rgba(100,200,255,0.2);
-        }
+    .ping-display { display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+        background: rgba(255,255,255,0.05); border-radius: 20px; font-family: monospace; font-size: 13px;
+        border: 1px solid rgba(255,255,255,0.1); }
+    .ping-good { color: #00ff88; } .ping-mid { color: #ffcc00; } .ping-bad { color: #ff4444; }
 
-        .server-status {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+    .stats-bar { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+    .stat { display: flex; align-items: center; gap: 6px; }
+    .stat-label { color: #888; }
+    .stat-value { font-family: monospace; color: #79c0ff; font-weight: bold; }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+    .game-time { display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+        background: rgba(100,200,255,0.1); border-radius: 20px; border: 1px solid rgba(100,200,255,0.2);
+        font-family: monospace; font-size: 13px; }
 
-        .status-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: #555;
-            transition: all 0.3s;
-        }
+    .water-panel { position: fixed; top: 60px; left: 20px; width: 200px; background: rgba(10,14,26,0.9);
+        backdrop-filter: blur(12px); border-radius: 12px; padding: 14px; border: 1px solid rgba(100,200,255,0.2); z-index: 100; }
+    .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 12px; }
+    .meter { margin-bottom: 10px; }
+    .meter-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .meter-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+    .meter-fill.oxygen { background: linear-gradient(90deg, #ff4444, #ffcc00, #00ff88); }
+    .meter-fill.quality { background: linear-gradient(90deg, #8b4513, #ffcc00, #4169e1); }
 
-        .status-dot.online {
-            background: #00ff88;
-            box-shadow: 0 0 8px #00ff88;
-            animation: pulse 2s infinite;
-        }
+    .species-panel { position: fixed; top: 60px; right: 20px; width: 280px; background: rgba(10,14,26,0.9);
+        backdrop-filter: blur(12px); border-radius: 12px; padding: 14px; border: 1px solid rgba(100,200,255,0.2);
+        z-index: 100; max-height: 500px; overflow-y: auto; }
+    .species-item { display: flex; align-items: center; gap: 10px; padding: 8px; margin-bottom: 6px;
+        background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid; }
+    .species-icon { font-size: 20px; min-width: 30px; text-align: center; }
+    .species-info { flex: 1; }
+    .species-name { font-size: 13px; font-weight: 500; }
+    .species-latin { font-size: 10px; color: #666; font-style: italic; }
+    .species-count { text-align: right; font-family: monospace; font-size: 12px; }
+    .count-adults { color: #79c0ff; } .count-fry { color: #98fb98; } .count-eggs { color: #ffd700; }
 
-        .status-dot.offline {
-            background: #ff4444;
-            box-shadow: 0 0 8px #ff4444;
-        }
+    .events-panel { position: fixed; bottom: 20px; left: 20px; width: 400px; max-height: 220px;
+        background: rgba(10,14,26,0.9); backdrop-filter: blur(12px); border-radius: 12px; padding: 14px;
+        border: 1px solid rgba(100,200,255,0.2); z-index: 100; overflow-y: auto; }
+    .event { padding: 4px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); color: #aaa; }
+    .event.birth { color: #98fb98; } .event.death { color: #ff6b6b; }
+    .event.combat { color: #ff9f43; } .event.system { color: #79c0ff; }
+    .event-time { font-family: monospace; color: #555; font-size: 10px; margin-right: 8px; }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
+    /* ===== КНОПКА КОРМЛЕНИЯ ===== */
+    .feed-panel { position: fixed; bottom: 20px; right: 20px; z-index: 100;
+        background: rgba(10,14,26,0.9); backdrop-filter: blur(12px); border-radius: 14px;
+        padding: 16px; border: 1px solid rgba(255,200,100,0.3); text-align: center; }
+    #feedBtn { background: linear-gradient(135deg, #ff9f43, #ff6b35); color: #fff; border: none;
+        padding: 14px 28px; border-radius: 30px; font-size: 16px; font-weight: bold; cursor: pointer;
+        box-shadow: 0 4px 15px rgba(255,150,60,0.4); transition: all 0.2s; font-family: inherit; }
+    #feedBtn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(255,150,60,0.6); }
+    #feedBtn:active { transform: scale(0.95); }
+    #feedBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .feed-stats { margin-top: 10px; font-size: 12px; color: #aaa; }
+    .feed-stats b { color: #ffcc00; font-family: monospace; }
 
-        .ping-display {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-            font-family: monospace;
-            font-size: 13px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+    .tooltip { position: fixed; background: rgba(10,14,26,0.95); backdrop-filter: blur(12px);
+        border: 1px solid rgba(100,200,255,0.3); border-radius: 10px; padding: 12px 16px; font-size: 12px;
+        pointer-events: none; z-index: 200; display: none; min-width: 200px; }
+    .tooltip-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+    .tooltip-species { font-size: 11px; color: #888; font-style: italic; margin-bottom: 8px; }
+    .tooltip-stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+    .tooltip-label { color: #888; } .tooltip-value { color: #79c0ff; font-family: monospace; }
+    .bar-mini { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    .bar-mini-fill { height: 100%; border-radius: 2px; }
 
-        .ping-value {
-            font-weight: bold;
-            min-width: 40px;
-        }
-
-        .ping-good { color: #00ff88; }
-        .ping-mid { color: #ffcc00; }
-        .ping-bad { color: #ff4444; }
-
-        .stats-bar {
-            display: flex;
-            gap: 16px;
-            font-size: 13px;
-        }
-
-        .stat {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .stat-label { color: #888; }
-        .stat-value {
-            font-family: monospace;
-            color: #79c0ff;
-            font-weight: bold;
-        }
-
-        .game-time {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            background: rgba(100,200,255,0.1);
-            border-radius: 20px;
-            border: 1px solid rgba(100,200,255,0.2);
-            font-family: monospace;
-            font-size: 13px;
-        }
-
-        /* ===== ПАНЕЛЬ ВОДЫ ===== */
-        .water-panel {
-            position: fixed;
-            top: 60px; left: 20px;
-            width: 200px;
-            background: rgba(10,14,26,0.9);
-            backdrop-filter: blur(12px);
-            border-radius: 12px;
-            padding: 14px;
-            border: 1px solid rgba(100,200,255,0.2);
-            z-index: 100;
-        }
-
-        .panel-title {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: #666;
-            margin-bottom: 12px;
-        }
-
-        .meter {
-            margin-bottom: 10px;
-        }
-
-        .meter-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            margin-bottom: 4px;
-        }
-
-        .meter-bar {
-            height: 6px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .meter-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.5s, background 0.5s;
-        }
-
-        .meter-fill.oxygen { background: linear-gradient(90deg, #ff4444, #ffcc00, #00ff88); }
-        .meter-fill.quality { background: linear-gradient(90deg, #8b4513, #ffcc00, #4169e1); }
-
-        /* ===== ПАНЕЛЬ ВИДОВ ===== */
-        .species-panel {
-            position: fixed;
-            top: 60px; right: 20px;
-            width: 280px;
-            background: rgba(10,14,26,0.9);
-            backdrop-filter: blur(12px);
-            border-radius: 12px;
-            padding: 14px;
-            border: 1px solid rgba(100,200,255,0.2);
-            z-index: 100;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .species-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            margin-bottom: 6px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 8px;
-            border-left: 3px solid;
-        }
-
-        .species-icon {
-            font-size: 20px;
-            min-width: 30px;
-            text-align: center;
-        }
-
-        .species-info {
-            flex: 1;
-        }
-
-        .species-name {
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .species-latin {
-            font-size: 10px;
-            color: #666;
-            font-style: italic;
-        }
-
-        .species-count {
-            text-align: right;
-            font-family: monospace;
-            font-size: 12px;
-        }
-
-        .count-adults { color: #79c0ff; }
-        .count-fry { color: #98fb98; }
-        .count-eggs { color: #ffd700; }
-
-        /* ===== ПАНЕЛЬ СОБЫТИЙ ===== */
-        .events-panel {
-            position: fixed;
-            bottom: 20px; left: 20px;
-            width: 400px;
-            max-height: 250px;
-            background: rgba(10,14,26,0.9);
-            backdrop-filter: blur(12px);
-            border-radius: 12px;
-            padding: 14px;
-            border: 1px solid rgba(100,200,255,0.2);
-            z-index: 100;
-            overflow-y: auto;
-        }
-
-        .event {
-            padding: 4px 0;
-            font-size: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
-            color: #aaa;
-        }
-
-        .event.birth { color: #98fb98; }
-        .event.death { color: #ff6b6b; }
-        .event.combat { color: #ff9f43; }
-        .event.system { color: #79c0ff; }
-
-        .event-time {
-            font-family: monospace;
-            color: #555;
-            font-size: 10px;
-            margin-right: 8px;
-        }
-
-        /* ===== ТУЛТИП ===== */
-        .tooltip {
-            position: fixed;
-            background: rgba(10,14,26,0.95);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(100,200,255,0.3);
-            border-radius: 10px;
-            padding: 12px 16px;
-            font-size: 12px;
-            pointer-events: none;
-            z-index: 200;
-            display: none;
-            min-width: 200px;
-        }
-
-        .tooltip-name {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-
-        .tooltip-species {
-            font-size: 11px;
-            color: #888;
-            font-style: italic;
-            margin-bottom: 8px;
-        }
-
-        .tooltip-stats {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 2px 10px;
-        }
-
-        .tooltip-label { color: #888; }
-        .tooltip-value { color: #79c0ff; font-family: monospace; }
-
-        .bar-mini {
-            height: 4px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 2px;
-        }
-
-        .bar-mini-fill {
-            height: 100%;
-            border-radius: 2px;
-        }
-
-        .bar-energy .bar-mini-fill { background: #ffcc00; }
-        .bar-hp .bar-mini-fill { background: #00ff88; }
-
-        /* ===== СКРОЛЛ ===== */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(100,200,255,0.3); border-radius: 3px; }
-    </style>
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(100,200,255,0.3); border-radius: 3px; }
+</style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
+<canvas id="canvas"></canvas>
 
-    <!-- Верхняя панель -->
-    <div class="hud-top">
-        <div class="server-status">
-            <div class="status-indicator">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="serverText">Подключение...</span>
-            </div>
-            <div class="ping-display">
-                📡 <span class="ping-value" id="pingValue">---</span>ms
-            </div>
+<div class="hud-top">
+    <div class="server-status">
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="serverText">Поиск сервера...</span>
         </div>
-
-        <div class="stats-bar">
-            <div class="stat">
-                <span class="stat-label">🐟 Рыб:</span>
-                <span class="stat-value" id="fishCount">0</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">👶 Мальков:</span>
-                <span class="stat-value" id="fryCount">0</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">🥚 Икры:</span>
-                <span class="stat-value" id="eggCount">0</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">🦠 Бактерий:</span>
-                <span class="stat-value" id="bacteriaCount">0</span>
-            </div>
-        </div>
-
-        <div class="game-time">
-            📅 День <span id="gameDay">0</span>
-            ⏰ <span id="gameHour">00</span>:00
-        </div>
+        <div class="ping-display">📡 <span id="pingValue" class="ping-good">---</span>ms</div>
     </div>
-
-    <!-- Панель воды -->
-    <div class="water-panel">
-        <div class="panel-title">Состояние воды</div>
-        <div class="meter">
-            <div class="meter-label">
-                <span>💧 Кислород</span>
-                <span id="oxygenValue">100%</span>
-            </div>
-            <div class="meter-bar">
-                <div class="meter-fill oxygen" id="oxygenBar" style="width: 100%"></div>
-            </div>
-        </div>
-        <div class="meter">
-            <div class="meter-label">
-                <span>✨ Качество</span>
-                <span id="qualityValue">100%</span>
-            </div>
-            <div class="meter-bar">
-                <div class="meter-fill quality" id="qualityBar" style="width: 100%"></div>
-            </div>
-        </div>
-        <div class="meter">
-            <div class="meter-label">
-                <span>🌡️ Температура</span>
-                <span id="tempValue">25°C</span>
-            </div>
-        </div>
-        <div class="meter">
-            <div class="meter-label">
-                <span>⚗️ pH</span>
-                <span id="phValue">7.0</span>
-            </div>
-        </div>
-        <div class="meter" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div class="meter-label">
-                <span>⏱️ Аптайм сервера</span>
-                <span id="uptimeValue" style="color: #79c0ff;">0м</span>
-            </div>
-        </div>
+    <div class="stats-bar">
+        <div class="stat"><span class="stat-label">🐟 Рыб:</span><span class="stat-value" id="fishCount">0</span></div>
+        <div class="stat"><span class="stat-label">👶 Мальков:</span><span class="stat-value" id="fryCount">0</span></div>
+        <div class="stat"><span class="stat-label">🥚 Икры:</span><span class="stat-value" id="eggCount">0</span></div>
+        <div class="stat"><span class="stat-label">🦠 Бактерий:</span><span class="stat-value" id="bacteriaCount">0</span></div>
     </div>
+    <div class="game-time">📅 День <span id="gameDay">0</span> ⏰ <span id="gameHour">00</span>:00</div>
+</div>
 
-    <!-- Панель видов -->
-    <div class="species-panel">
-        <div class="panel-title">Виды рыб</div>
-        <div id="speciesContainer"></div>
+<div class="water-panel">
+    <div class="panel-title">Состояние воды</div>
+    <div class="meter"><div class="meter-label"><span>💧 Кислород</span><span id="oxygenValue">100%</span></div>
+        <div class="meter-bar"><div class="meter-fill oxygen" id="oxygenBar" style="width:100%"></div></div></div>
+    <div class="meter"><div class="meter-label"><span>✨ Качество</span><span id="qualityValue">100%</span></div>
+        <div class="meter-bar"><div class="meter-fill quality" id="qualityBar" style="width:100%"></div></div></div>
+    <div class="meter"><div class="meter-label"><span>🌡️ Температура</span><span id="tempValue">25°C</span></div></div>
+    <div class="meter"><div class="meter-label"><span>⚗️ pH</span><span id="phValue">7.0</span></div></div>
+    <div class="meter" style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1);">
+        <div class="meter-label"><span>⏱️ Аптайм</span><span id="uptimeValue" style="color:#79c0ff;">0м</span></div></div>
+</div>
+
+<div class="species-panel">
+    <div class="panel-title">Виды рыб</div>
+    <div id="speciesContainer"></div>
+</div>
+
+<div class="events-panel">
+    <div class="panel-title">Летопись аквариума</div>
+    <div id="eventsContainer"></div>
+</div>
+
+<div class="feed-panel">
+    <button id="feedBtn">🍞 Покормить рыбок</button>
+    <div class="feed-stats">
+        Кормлений посетителями: <b id="manualFeeds">0</b><br>
+        Авто-кормлений: <b id="autoFeeds">0</b>
     </div>
+</div>
 
-    <!-- Панель событий -->
-    <div class="events-panel">
-        <div class="panel-title">Летопись аквариума</div>
-        <div id="eventsContainer"></div>
-    </div>
+<div class="tooltip" id="tooltip"></div>
 
-    <!-- Тултип -->
-    <div class="tooltip" id="tooltip"></div>
+<script>
+// ============================================================
+// АВТО-ПОИСК СЕРВЕРА (главное исправление!)
+// ============================================================
+const RENDER_URL = "https://cytophage.onrender.com"; // твой сервер на Render
+let SERVER_URL = null;
 
-    <script>
-        const SERVER_URL = window.location.origin;
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
+async function detectServer() {
+    const candidates = [];
+    if (location.protocol === "http:" || location.protocol === "https:") {
+        candidates.push(location.origin);
+    }
+    candidates.push("http://localhost:3000");
+    if (!candidates.includes(RENDER_URL)) candidates.push(RENDER_URL);
 
-        let worldState = null;
-        let pingMs = 0;
-        let lastPingTime = Date.now();
-        let serverOnline = false;
-        let hoveredEntity = null;
-        let mouseX = 0, mouseY = 0;
+    for (const url of candidates) {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 4000);
+            const res = await fetch(url + "/ping", { cache: "no-cache", signal: ctrl.signal });
+            clearTimeout(t);
+            if (res.ok) { SERVER_URL = url; return true; }
+        } catch (e) { /* пробуем следующий */ }
+    }
+    return false;
+}
 
-        // Масштабирование
-        let scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0;
-
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+async function ensureServer() {
+    while (!SERVER_URL) {
+        const ok = await detectServer();
+        if (ok) {
+            document.getElementById("serverText").textContent = "Сервер онлайн";
+            document.getElementById("statusDot").classList.add("online");
+            startPolling();
+        } else {
+            document.getElementById("serverText").textContent = "Поиск сервера...";
+            await new Promise(r => setTimeout(r, 5000));
         }
-        window.addEventListener("resize", resize);
-        resize();
+    }
+}
 
-        // ====== ФОРМАТИРОВАНИЕ ======
-        function formatUptime(seconds) {
-            if (seconds < 60) return `${seconds}с`;
-            if (seconds < 3600) return `${Math.floor(seconds/60)}м`;
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            return `${h}ч ${m}м`;
+// ============================================================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let worldState = null;
+let pingMs = 0;
+let serverOnline = false;
+let hoveredEntity = null;
+let mouseX = 0, mouseY = 0;
+let scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener("resize", resize);
+resize();
+
+function formatUptime(s) {
+    if (s < 60) return s + "с";
+    if (s < 3600) return Math.floor(s / 60) + "м";
+    return Math.floor(s / 3600) + "ч " + Math.floor((s % 3600) / 60) + "м";
+}
+
+const SPECIES_ICONS = { guppy: "🐠", neon: "✨", angelfish: "👼", swordtail: "⚔️", corydoras: "🐡", cichlid: "🦈" };
+
+// ============================================================
+// КОРМЛЕНИЕ
+// ============================================================
+const feedBtn = document.getElementById("feedBtn");
+feedBtn.addEventListener("click", async () => {
+    if (!SERVER_URL) return;
+    feedBtn.disabled = true;
+    try {
+        const res = await fetch(SERVER_URL + "/feed", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById("manualFeeds").textContent = data.manualFeeds;
+            document.getElementById("autoFeeds").textContent = data.autoFeeds;
         }
+    } catch (e) { console.error(e); }
+    setTimeout(() => { feedBtn.disabled = false; }, 1500);
+});
 
-        // ====== ИКОНКИ ВИДОВ ======
-        const SPECIES_ICONS = {
-            guppy: "🐠",
-            neon: "✨",
-            angelfish: "👼",
-            swordtail: "⚔️",
-            corydoras: "🐡",
-            cichlid: "🦈",
-        };
+// ============================================================
+// FETCH
+// ============================================================
+let pollingStarted = false;
+function startPolling() {
+    if (pollingStarted) return;
+    pollingStarted = true;
+    setInterval(fetchState, 300);
+    fetchState();
+}
 
-        // ====== FETCH ======
-        async function fetchState() {
-            const start = Date.now();
-            try {
-                const res = await fetch(`${SERVER_URL}/state`, { cache: "no-cache" });
-                const data = await res.json();
-                worldState = data;
-                pingMs = Date.now() - start;
-                lastPingTime = Date.now();
+async function fetchState() {
+    const start = Date.now();
+    try {
+        const res = await fetch(SERVER_URL + "/state", { cache: "no-cache" });
+        const data = await res.json();
+        worldState = data;
+        pingMs = Date.now() - start;
 
-                if (!serverOnline) {
-                    serverOnline = true;
-                    document.getElementById("statusDot").classList.add("online");
-                    document.getElementById("statusDot").classList.remove("offline");
-                    document.getElementById("serverText").textContent = "Сервер онлайн";
-                }
-                updateHUD();
-            } catch (err) {
-                if (serverOnline) {
-                    serverOnline = false;
-                    document.getElementById("statusDot").classList.remove("online");
-                    document.getElementById("statusDot").classList.add("offline");
-                    document.getElementById("serverText").textContent = "Сервер офлайн";
-                }
-            }
+        if (!serverOnline) {
+            serverOnline = true;
+            document.getElementById("statusDot").classList.add("online");
+            document.getElementById("statusDot").classList.remove("offline");
+            document.getElementById("serverText").textContent = "Сервер онлайн";
         }
-
-        // ====== ОБНОВЛЕНИЕ UI ======
-        function updateHUD() {
-            if (!worldState) return;
-
-            // Статы
-            document.getElementById("fishCount").textContent = worldState.fishes.length;
-            document.getElementById("fryCount").textContent = worldState.fry.length;
-            document.getElementById("eggCount").textContent = worldState.eggs.length;
-            document.getElementById("bacteriaCount").textContent = worldState.bacteria.length;
-
-            // Игровое время
-            document.getElementById("gameDay").textContent = worldState.gameTime.days;
-            document.getElementById("gameHour").textContent = String(worldState.gameTime.hours).padStart(2, "0");
-
-            // Пинг
-            const pingEl = document.getElementById("pingValue");
-            pingEl.textContent = pingMs;
-            pingEl.className = "ping-value " + (pingMs < 100 ? "ping-good" : pingMs < 300 ? "ping-mid" : "ping-bad");
-
-            // Вода
-            const env = worldState.environment;
-            document.getElementById("oxygenValue").textContent = Math.round(env.oxygen) + "%";
-            document.getElementById("oxygenBar").style.width = env.oxygen + "%";
-            document.getElementById("qualityValue").textContent = Math.round(env.quality) + "%";
-            document.getElementById("qualityBar").style.width = env.quality + "%";
-            document.getElementById("tempValue").textContent = env.temperature.toFixed(1) + "°C";
-            document.getElementById("phValue").textContent = env.ph.toFixed(1);
-            document.getElementById("uptimeValue").textContent = formatUptime(worldState.stats.serverUptime);
-
-            // Виды
-            const container = document.getElementById("speciesContainer");
-            container.innerHTML = "";
-            for (const [key, stats] of Object.entries(worldState.speciesStats)) {
-                if (stats.adults + stats.fry + stats.eggs === 0) continue;
-
-                const spec = worldState.species[key];
-                const div = document.createElement("div");
-                div.className = "species-item";
-                div.style.borderLeftColor = spec.color.body;
-                div.innerHTML = `
-                    <span class="species-icon">${SPECIES_ICONS[key] || "🐟"}</span>
-                    <div class="species-info">
-                        <div class="species-name">${spec.name}</div>
-                        <div class="species-latin">${spec.nameLatin}</div>
-                    </div>
-                    <div class="species-count">
-                        <div class="count-adults">🐟 ${stats.adults}</div>
-                        ${stats.fry > 0 ? `<div class="count-fry">👶 ${stats.fry}</div>` : ""}
-                        ${stats.eggs > 0 ? `<div class="count-eggs">🥚 ${stats.eggs}</div>` : ""}
-                    </div>
-                `;
-                container.appendChild(div);
-            }
-
-            // События
-            const eventsContainer = document.getElementById("eventsContainer");
-            eventsContainer.innerHTML = "";
-            for (const event of [...worldState.events].reverse().slice(0, 20)) {
-                const div = document.createElement("div");
-                div.className = `event ${event.type}`;
-                div.innerHTML = `<span class="event-time">Д${event.gameDay}</span>${event.message}`;
-                eventsContainer.appendChild(div);
-            }
+        updateHUD();
+    } catch (err) {
+        if (serverOnline) {
+            serverOnline = false;
+            document.getElementById("statusDot").classList.remove("online");
+            document.getElementById("statusDot").classList.add("offline");
+            document.getElementById("serverText").textContent = "Сервер офлайн";
         }
+    }
+}
 
-        // ====== ОТРИСОВКА ======
+function updateHUD() {
+    if (!worldState) return;
 
-        // Масштаб мира
-        function updateScale() {
-            if (!worldState) return;
-            const w = worldState.config.aquarium.width;
-            const h = worldState.config.aquarium.height;
+    document.getElementById("fishCount").textContent = worldState.fishes.length;
+    document.getElementById("fryCount").textContent = worldState.fry.length;
+    document.getElementById("eggCount").textContent = worldState.eggs.length;
+    document.getElementById("bacteriaCount").textContent = worldState.bacteria.length;
+    document.getElementById("gameDay").textContent = worldState.gameTime.days;
+    document.getElementById("gameHour").textContent = String(worldState.gameTime.hours).padStart(2, "0");
 
-            scaleX = (canvas.width - 40) / w;
-            scaleY = (canvas.height - 120) / h;
-            const scale = Math.min(scaleX, scaleY);
-            scaleX = scaleY = scale;
+    const pingEl = document.getElementById("pingValue");
+    pingEl.textContent = pingMs;
+    pingEl.className = pingMs < 100 ? "ping-good" : pingMs < 300 ? "ping-mid" : "ping-bad";
 
-            offsetX = (canvas.width - w * scale) / 2;
-            offsetY = 60 + (canvas.height - 120 - h * scale) / 2;
+    const env = worldState.environment;
+    document.getElementById("oxygenValue").textContent = Math.round(env.oxygen) + "%";
+    document.getElementById("oxygenBar").style.width = env.oxygen + "%";
+    document.getElementById("qualityValue").textContent = Math.round(env.quality) + "%";
+    document.getElementById("qualityBar").style.width = env.quality + "%";
+    document.getElementById("tempValue").textContent = env.temperature.toFixed(1) + "°C";
+    document.getElementById("phValue").textContent = env.ph.toFixed(1);
+    document.getElementById("uptimeValue").textContent = formatUptime(worldState.stats.serverUptime);
+
+    document.getElementById("manualFeeds").textContent = worldState.stats.manualFeeds || 0;
+    document.getElementById("autoFeeds").textContent = worldState.stats.autoFeeds || 0;
+
+    const container = document.getElementById("speciesContainer");
+    container.innerHTML = "";
+    for (const [key, stats] of Object.entries(worldState.speciesStats)) {
+        if (stats.adults + stats.fry + stats.eggs === 0) continue;
+        const spec = worldState.species[key];
+        const div = document.createElement("div");
+        div.className = "species-item";
+        div.style.borderLeftColor = spec.color.body;
+        div.innerHTML = `
+            <span class="species-icon">${SPECIES_ICONS[key] || "🐟"}</span>
+            <div class="species-info">
+                <div class="species-name">${spec.name}</div>
+                <div class="species-latin">${spec.nameLatin}</div>
+            </div>
+            <div class="species-count">
+                <div class="count-adults">🐟 ${stats.adults}</div>
+                ${stats.fry ? `<div class="count-fry">👶 ${stats.fry}</div>` : ""}
+                ${stats.eggs ? `<div class="count-eggs">🥚 ${stats.eggs}</div>` : ""}
+            </div>`;
+        container.appendChild(div);
+    }
+
+    const ev = document.getElementById("eventsContainer");
+    ev.innerHTML = "";
+    for (const e of [...worldState.events].reverse().slice(0, 20)) {
+        const div = document.createElement("div");
+        div.className = "event " + e.type;
+        div.innerHTML = `<span class="event-time">Д${e.gameDay}</span>${e.message}`;
+        ev.appendChild(div);
+    }
+}
+
+// ============================================================
+// ОТРИСОВКА
+// ============================================================
+function updateScale() {
+    if (!worldState) return;
+    const W = worldState.config.aquarium.width, H = worldState.config.aquarium.height;
+    const s = Math.min((canvas.width - 40) / W, (canvas.height - 120) / H);
+    scaleX = scaleY = s;
+    offsetX = (canvas.width - W * s) / 2;
+    offsetY = 60 + (canvas.height - 120 - H * s) / 2;
+}
+function toScreen(x, y) { return { x: offsetX + x * scaleX, y: offsetY + y * scaleY }; }
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!worldState) { requestAnimationFrame(draw); return; }
+    updateScale();
+
+    const W = worldState.config.aquarium.width, H = worldState.config.aquarium.height;
+    const tl = toScreen(0, 0), br = toScreen(W, H);
+    const aqW = br.x - tl.x, aqH = br.y - tl.y;
+
+    ctx.strokeStyle = "#1a2a3a"; ctx.lineWidth = 4;
+    ctx.strokeRect(tl.x - 4, tl.y - 4, aqW + 8, aqH + 8);
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(tl.x, tl.y, aqW, aqH); ctx.clip();
+
+    const wg = ctx.createLinearGradient(tl.x, tl.y, tl.x, br.y);
+    wg.addColorStop(0, "rgba(20,60,100,0.9)");
+    wg.addColorStop(0.3, "rgba(15,50,80,0.95)");
+    wg.addColorStop(1, "rgba(10,30,50,1)");
+    ctx.fillStyle = wg; ctx.fillRect(tl.x, tl.y, aqW, aqH);
+
+    // Песок
+    const sandY = br.y - 80 * scaleY;
+    const sg = ctx.createLinearGradient(tl.x, sandY, tl.x, br.y);
+    sg.addColorStop(0, "#8B7355"); sg.addColorStop(0.3, "#6B5B45"); sg.addColorStop(1, "#4a3f30");
+    ctx.fillStyle = sg; ctx.fillRect(tl.x, sandY, aqW, 80 * scaleY + 5);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    for (let i = 0; i < 200; i++) {
+        ctx.fillRect(tl.x + (i * 7 + 3) % aqW, sandY + (i * 13 + 5) % (80 * scaleY), 1, 1);
+    }
+
+    // Камни
+    for (const rock of worldState.rocks) {
+        const p = toScreen(rock.x, rock.y);
+        ctx.fillStyle = rock.color;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, rock.width * scaleX / 2, rock.height * scaleY / 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.1)";
+        ctx.beginPath(); ctx.ellipse(p.x - rock.width * 0.15 * scaleX, p.y - rock.height * 0.15 * scaleY, rock.width * 0.15 * scaleX, rock.height * 0.1 * scaleY, -0.3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Растения
+    const time = Date.now() * 0.001;
+    for (const plant of worldState.plants) drawPlant(plant, time);
+
+    // Еда
+    for (const food of worldState.food) {
+        const p = toScreen(food.x, food.y);
+        const s = food.size * scaleX;
+        ctx.fillStyle = "#D4A574";
+        ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Икра
+    for (const egg of worldState.eggs) {
+        const p = toScreen(egg.x, egg.y);
+        const s = Math.max(1.5, egg.size * scaleX);
+        ctx.fillStyle = "rgba(255,255,200,0.8)";
+        ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.beginPath(); ctx.arc(p.x - s * 0.3, p.y - s * 0.3, s * 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Трупы
+    for (const c of worldState.corpses) drawCorpse(c);
+
+    // Бактерии
+    ctx.fillStyle = "rgba(100,255,100,0.4)";
+    for (const b of worldState.bacteria) {
+        const p = toScreen(b.x, b.y);
+        ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Мальки и рыбы
+    for (const fry of worldState.fry) drawFry(fry);
+    hoveredEntity = null;
+    for (const fish of worldState.fishes) drawFish(fish);
+
+    // Пузырьки
+    for (const b of worldState.bubbles) {
+        const p = toScreen(b.x, b.y);
+        const s = b.size * scaleX;
+        ctx.fillStyle = "rgba(200,230,255,0.3)";
+        ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+
+    ctx.restore();
+
+    if (hoveredEntity) drawTooltip(hoveredEntity);
+    else document.getElementById("tooltip").style.display = "none";
+
+    requestAnimationFrame(draw);
+}
+
+function drawPlant(plant, time) {
+    const base = toScreen(plant.x, plant.baseY);
+    const scale = scaleX;
+    const sway = Math.sin(time * 0.5 + plant.swayOffset) * 8 * scale;
+    const height = plant.height * scale;
+
+    ctx.strokeStyle = "#2d5016"; ctx.lineWidth = 3 * scale;
+    ctx.beginPath(); ctx.moveTo(base.x, base.y);
+    let px = base.x, py = base.y;
+    const segments = 8;
+    for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        px = base.x + sway * t * t;
+        py = base.y - (height / segments) * i;
+        ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = "#3a8025";
+    for (let i = 0; i < plant.leaves; i++) {
+        const t = (i + 1) / (plant.leaves + 1);
+        const lx = base.x + sway * t * t;
+        const ly = base.y - height * t;
+        const leafSize = 25 * scale * (1 - t * 0.3);
+        const side = i % 2 === 0 ? 1 : -1;
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(side * 0.5 + Math.sin(time * 0.8 + i) * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(leafSize * 0.3, -leafSize * 0.2, leafSize * 0.8, -leafSize * 0.1, leafSize, 0);
+        ctx.bezierCurveTo(leafSize * 0.8, leafSize * 0.1, leafSize * 0.3, leafSize * 0.2, 0, 0);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+function drawFish(fish) {
+    const pos = toScreen(fish.x, fish.y);
+    const size = fish.size * scaleX;
+    const spec = worldState.species[fish.species];
+    const dir = fish.facingRight ? 1 : -1;
+
+    const dx = mouseX - pos.x, dy = mouseY - pos.y;
+    if (dx * dx + dy * dy < (size + 10) * (size + 10)) hoveredEntity = { type: "fish", data: fish };
+
+    const swim = Math.sin(fish.swimPhase || 0) * size * 0.05;
+
+    ctx.save();
+    ctx.translate(pos.x, pos.y + swim);
+    ctx.scale(dir, 1);
+
+    // Хвост
+    const wag = Math.sin((fish.swimPhase || 0) * 2) * 0.3;
+    ctx.fillStyle = spec.color.tail || spec.color.body;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.5, 0);
+    ctx.lineTo(-size * 1.2 + Math.cos(wag) * size * 0.15, -size * 0.5);
+    ctx.quadraticCurveTo(-size, 0, -size * 1.2 + Math.cos(wag) * size * 0.15, size * 0.5);
+    ctx.closePath(); ctx.fill();
+
+    // Тело
+    ctx.fillStyle = spec.color.body;
+    ctx.beginPath();
+    if (fish.species === "angelfish") {
+        ctx.moveTo(size * 0.7, 0);
+        ctx.quadraticCurveTo(size * 0.3, -size * 0.8, 0, -size);
+        ctx.quadraticCurveTo(-size * 0.3, -size * 0.8, -size * 0.5, 0);
+        ctx.quadraticCurveTo(-size * 0.3, size * 0.8, 0, size);
+        ctx.quadraticCurveTo(size * 0.3, size * 0.8, size * 0.7, 0);
+    } else {
+        ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    if (spec.color.stripe) {
+        ctx.fillStyle = spec.color.stripe;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.ellipse(0, 0, size * 0.7, size * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+    if (spec.color.stripes && fish.species === "angelfish") {
+        ctx.strokeStyle = spec.color.stripes; ctx.lineWidth = size * 0.06;
+        for (let i = -1; i <= 1; i++) {
+            ctx.beginPath(); ctx.moveTo(i * size * 0.2, -size * 0.5); ctx.lineTo(i * size * 0.2, size * 0.5); ctx.stroke();
         }
-
-        function toScreen(x, y) {
-            return { x: offsetX + x * scaleX, y: offsetY + y * scaleY };
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (!worldState) {
-                requestAnimationFrame(draw);
-                return;
-            }
-
-            updateScale();
-
-            const W = worldState.config.aquarium.width;
-            const H = worldState.config.aquarium.height;
-            const sandH = 80;
-
-            // ====== ФОН (стена за аквариумом) ======
-            ctx.fillStyle = "#0a0e1a";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // ====== АКВАРИУМ ======
-            const topLeft = toScreen(0, 0);
-            const bottomRight = toScreen(W, H);
-            const aqW = bottomRight.x - topLeft.x;
-            const aqH = bottomRight.y - topLeft.y;
-
-            // Рамка аквариума
-            ctx.strokeStyle = "#1a2a3a";
-            ctx.lineWidth = 4;
-            ctx.strokeRect(topLeft.x - 4, topLeft.y - 4, aqW + 8, aqH + 8);
-
-            // Вода (градиент)
-            const waterGrad = ctx.createLinearGradient(topLeft.x, topLeft.y, topLeft.x, bottomRight.y);
-            waterGrad.addColorStop(0, "rgba(20, 60, 100, 0.9)");
-            waterGrad.addColorStop(0.3, "rgba(15, 50, 80, 0.95)");
-            waterGrad.addColorStop(1, "rgba(10, 30, 50, 1)");
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(topLeft.x, topLeft.y, aqW, aqH);
-            ctx.clip();
-
-            ctx.fillStyle = waterGrad;
-            ctx.fillRect(topLeft.x, topLeft.y, aqW, aqH);
-
-            // ====== ПЕСОК ======
-            const sandY = bottomRight.y - sandH * scaleY;
-            const sandGrad = ctx.createLinearGradient(topLeft.x, sandY, topLeft.x, bottomRight.y);
-            sandGrad.addColorStop(0, "#8B7355");
-            sandGrad.addColorStop(0.3, "#6B5B45");
-            sandGrad.addColorStop(1, "#4a3f30");
-
-            ctx.fillStyle = sandGrad;
-            ctx.fillRect(topLeft.x, sandY, aqW, sandH * scaleY + 5);
-
-            // Текстура песка (точки)
-            ctx.fillStyle = "rgba(255,255,255,0.05)";
-            for (let i = 0; i < 200; i++) {
-                const px = topLeft.x + (i * 7 + 3) % aqW;
-                const py = sandY + (i * 13 + 5) % (sandH * scaleY);
-                ctx.fillRect(px, py, 1, 1);
-            }
-
-            // ====== КАМНИ ======
-            for (const rock of worldState.rocks) {
-                const pos = toScreen(rock.x, rock.y);
-                const w = rock.width * scaleX;
-                const h = rock.height * scaleY;
-
-                ctx.fillStyle = rock.color;
-                ctx.beginPath();
-                ctx.ellipse(pos.x, pos.y, w / 2, h / 2, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Блик
-                ctx.fillStyle = "rgba(255,255,255,0.1)";
-                ctx.beginPath();
-                ctx.ellipse(pos.x - w * 0.15, pos.y - h * 0.15, w * 0.15, h * 0.1, -0.3, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // ====== РАСТЕНИЯ ======
-            const time = Date.now() * 0.001;
-            for (const plant of worldState.plants) {
-                drawPlant(plant, time);
-            }
-
-            // ====== ЕДА ======
-            for (const food of worldState.food) {
-                const pos = toScreen(food.x, food.y);
-                const size = food.size * scaleX;
-
-                ctx.fillStyle = "#D4A574";
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.fillStyle = "rgba(255,200,100,0.3)";
-                ctx.beginPath();
-                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.4, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // ====== ИКРА ======
-            for (const egg of worldState.eggs) {
-                const pos = toScreen(egg.x, egg.y);
-                const size = egg.size * scaleX;
-                const spec = worldState.species[egg.species];
-
-                // Икринка
-                ctx.fillStyle = "rgba(255,255,200,0.8)";
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Блик
-                ctx.fillStyle = "rgba(255,255,255,0.6)";
-                ctx.beginPath();
-                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.3, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // ====== ТРУПЫ ======
-            for (const corpse of worldState.corpses) {
-                drawCorpse(corpse);
-            }
-
-            // ====== БАКТЕРИИ ======
-            ctx.fillStyle = "rgba(100, 255, 100, 0.4)";
-            for (const b of worldState.bacteria) {
-                const pos = toScreen(b.x, b.y);
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // ====== МАЛЬКИ ======
-            for (const fry of worldState.fry) {
-                drawFry(fry);
-            }
-
-            // ====== РЫБЫ ======
-            hoveredEntity = null;
-            for (const fish of worldState.fishes) {
-                drawFish(fish);
-            }
-
-            // ====== ПУЗЫРЬКИ ======
-            ctx.fillStyle = "rgba(200, 230, 255, 0.3)";
-            for (const bubble of worldState.bubbles) {
-                const pos = toScreen(bubble.x, bubble.y);
-                const size = bubble.size * scaleX;
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Блик
-                ctx.strokeStyle = "rgba(255,255,255,0.4)";
-                ctx.lineWidth = 0.5;
-                ctx.stroke();
-
-                ctx.fillStyle = "rgba(255,255,255,0.4)";
-                ctx.beginPath();
-                ctx.arc(pos.x - size * 0.3, pos.y - size * 0.3, size * 0.2, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = "rgba(200, 230, 255, 0.3)";
-            }
-
-            ctx.restore();
-
-            // ====== БЛИКИ НА СТЕКЛЕ ======
-            ctx.strokeStyle = "rgba(255,255,255,0.1)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(topLeft.x + 20, topLeft.y + 10);
-            ctx.lineTo(topLeft.x + 20, topLeft.y + aqH * 0.3);
-            ctx.stroke();
-
-            // ====== ТУЛТИП ======
-            if (hoveredEntity) {
-                drawTooltip(hoveredEntity);
-            }
-
-            requestAnimationFrame(draw);
-        }
-
-        function drawPlant(plant, time) {
-            const base = toScreen(plant.x, plant.baseY);
-            const scale = scaleX;
-
-            const sway = Math.sin(time * 0.5 + plant.swayOffset) * 8 * scale;
-
-            // Стебель
-            ctx.strokeStyle = "#2d5016";
-            ctx.lineWidth = 3 * scale;
-            ctx.beginPath();
-            ctx.moveTo(base.x, base.y);
-
-            const segments = 8;
-            const height = plant.height * scale;
-            const segH = height / segments;
-
-            let px = base.x;
-            let py = base.y;
-
-            for (let i = 1; i <= segments; i++) {
-                const t = i / segments;
-                const swayAmount = sway * t * t;
-                px = base.x + swayAmount;
-                py = base.y - segH * i;
-                ctx.lineTo(px, py);
-            }
-            ctx.stroke();
-
-            // Листья
-            ctx.fillStyle = "#3a8025";
-            for (let i = 0; i < plant.leaves; i++) {
-                const t = (i + 1) / (plant.leaves + 1);
-                const lx = base.x + sway * t * t;
-                const ly = base.y - height * t;
-                const leafSize = (20 + Math.random() * 10) * scale * (1 - t * 0.3);
-
-                const side = i % 2 === 0 ? 1 : -1;
-                const leafAngle = side * 0.5 + Math.sin(time * 0.8 + i) * 0.1;
-
-                ctx.save();
-                ctx.translate(lx, ly);
-                ctx.rotate(leafAngle);
-
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.bezierCurveTo(
-                    leafSize * 0.3, -leafSize * 0.2,
-                    leafSize * 0.8, -leafSize * 0.1,
-                    leafSize, 0
-                );
-                ctx.bezierCurveTo(
-                    leafSize * 0.8, leafSize * 0.1,
-                    leafSize * 0.3, leafSize * 0.2,
-                    0, 0
-                );
-                ctx.fill();
-                ctx.restore();
-            }
-        }
-
-        function drawFish(fish) {
-            const pos = toScreen(fish.x, fish.y);
-            const size = fish.size * scaleX;
-            const spec = worldState.species[fish.species];
-            const dir = fish.facingRight ? 1 : -1;
-
-            // Проверка наведения
-            const dx = mouseX - pos.x;
-            const dy = mouseY - pos.y;
-            if (dx * dx + dy * dy < (size + 10) * (size + 10)) {
-                hoveredEntity = { type: "fish", data: fish };
-            }
-
-            const swimOffset = Math.sin(fish.swimPhase || 0) * size * 0.1;
-
-            ctx.save();
-            ctx.translate(pos.x, pos.y + swimOffset * 0.3);
-            ctx.scale(dir, 1);
-
-            // ===== ХВОСТ =====
-            const tailWag = Math.sin((fish.swimPhase || 0) * 2) * 0.3;
-
-            ctx.fillStyle = spec.color.tail || spec.color.body;
-            ctx.beginPath();
-            ctx.moveTo(-size * 0.5, 0);
-            ctx.lineTo(-size * 1.2 + Math.cos(tailWag) * size * 0.15, -size * 0.5);
-            ctx.quadraticCurveTo(-size * 1.0, 0, -size * 1.2 + Math.cos(tailWag) * size * 0.15, size * 0.5);
-            ctx.closePath();
-            ctx.fill();
-
-            // ===== ТЕЛО =====
-            ctx.fillStyle = spec.color.body;
-            ctx.beginPath();
-
-            if (fish.species === "angelfish") {
-                // Треугольная форма скалярии
-                ctx.moveTo(size * 0.7, 0);
-                ctx.quadraticCurveTo(size * 0.3, -size * 0.8, 0, -size * 1.0);
-                ctx.quadraticCurveTo(-size * 0.3, -size * 0.8, -size * 0.5, 0);
-                ctx.quadraticCurveTo(-size * 0.3, size * 0.8, 0, size * 1.0);
-                ctx.quadraticCurveTo(size * 0.3, size * 0.8, size * 0.7, 0);
-            } else {
-                // Обычная овальная форма
-                ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
-            }
-            ctx.fill();
-
-            // Полоски (для неонов)
-            if (spec.color.stripe) {
-                ctx.fillStyle = spec.color.stripe;
-                ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.005) * 0.2;
-                ctx.beginPath();
-                ctx.ellipse(0, 0, size * 0.7, size * 0.15, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
-            }
-
-            // Полоски (для скалярий)
-            if (spec.color.stripes && fish.species === "angelfish") {
-                ctx.strokeStyle = spec.color.stripes;
-                ctx.lineWidth = size * 0.06;
-                for (let i = -1; i <= 1; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(i * size * 0.2, -size * 0.5);
-                    ctx.lineTo(i * size * 0.2, size * 0.5);
-                    ctx.stroke();
-                }
-            }
-
-            // Пятна (для цихлид)
-            if (spec.color.spots && fish.species === "cichlid") {
-                ctx.fillStyle = spec.color.spots;
-                ctx.beginPath();
-                ctx.arc(size * 0.3, -size * 0.1, size * 0.12, 0, Math.PI * 2);
-                ctx.arc(-size * 0.1, size * 0.15, size * 0.1, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Меч (для меченосцев)
-            if (spec.hasSword && fish.gender === "male") {
-                ctx.fillStyle = spec.color.sword || "#FFD700";
-                ctx.beginPath();
-                ctx.moveTo(-size * 1.1, 0);
-                ctx.lineTo(-size * 2.0, size * 0.15);
-                ctx.lineTo(-size * 1.1, size * 0.05);
-                ctx.closePath();
-                ctx.fill();
-            }
-
-            // Верхний плавник
-            ctx.fillStyle = spec.color.tail || spec.color.body;
-            ctx.globalAlpha = 0.7;
-            ctx.beginPath();
-            ctx.moveTo(-size * 0.1, -size * 0.35);
-            ctx.quadraticCurveTo(size * 0.1, -size * 0.7, size * 0.3, -size * 0.4);
-            ctx.quadraticCurveTo(size * 0.2, -size * 0.35, -size * 0.1, -size * 0.35);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-
-            // Нижний плавник
-            ctx.beginPath();
-            ctx.moveTo(0, size * 0.35);
-            ctx.quadraticCurveTo(size * 0.15, size * 0.6, size * 0.25, size * 0.4);
-            ctx.closePath();
-            ctx.fill();
-
-            // Грудной плавник (анимированный)
-            const finWag = Math.sin((fish.swimPhase || 0) * 3) * 0.2;
-            ctx.save();
-            ctx.translate(size * 0.2, size * 0.15);
-            ctx.rotate(finWag);
-            ctx.fillStyle = spec.color.body;
-            ctx.globalAlpha = 0.6;
-            ctx.beginPath();
-            ctx.ellipse(0, size * 0.1, size * 0.15, size * 0.1, 0.3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.restore();
-
-            // Глаз
-            ctx.fillStyle = "#FFFFFF";
-            ctx.beginPath();
-            ctx.arc(size * 0.45, -size * 0.08, size * 0.12, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = "#000000";
-            ctx.beginPath();
-            ctx.arc(size * 0.47, -size * 0.08, size * 0.07, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Блик глаза
-            ctx.fillStyle = "#FFFFFF";
-            ctx.beginPath();
-            ctx.arc(size * 0.49, -size * 0.1, size * 0.03, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Рот
-            ctx.strokeStyle = "rgba(0,0,0,0.3)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(size * 0.7, size * 0.05, size * 0.05, 0, Math.PI * 0.5);
-            ctx.stroke();
-
-            // Индикатор беременности
-            if (fish.pregnant) {
-                ctx.fillStyle = "rgba(255, 100, 200, 0.4)";
-                ctx.beginPath();
-                ctx.arc(-size * 0.1, size * 0.1, size * 0.25, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            ctx.restore();
-
-            // HP бар если повреждена
-            if (fish.hp < 100) {
-                const barWidth = size * 1.5;
-                const barX = pos.x - barWidth / 2;
-                const barY = pos.y - size - 10;
-                const hpPct = fish.hp / 100;
-
-                ctx.fillStyle = "rgba(0,0,0,0.5)";
-                ctx.fillRect(barX, barY, barWidth, 4);
-
-                ctx.fillStyle = hpPct > 0.5 ? "#00ff88" : hpPct > 0.25 ? "#ffcc00" : "#ff4444";
-                ctx.fillRect(barX, barY, barWidth * hpPct, 4);
-            }
-
-            // Имя над рыбой (если большая)
-            if (size > 10) {
-                ctx.fillStyle = "rgba(255,255,255,0.7)";
-                ctx.font = `${Math.max(8, size * 0.3)}px 'Segoe UI'`;
-                ctx.textAlign = "center";
-                ctx.fillText(fish.name, pos.x, pos.y - size - 12);
-            }
-        }
-
-        function drawFry(fry) {
-            const pos = toScreen(fry.x, fry.y);
-            const size = fry.size * scaleX;
-
-            const dx = mouseX - pos.x;
-            const dy = mouseY - pos.y;
-            if (dx * dx + dy * dy < (size + 8) * (size + 8)) {
-                hoveredEntity = { type: "fry", data: fry };
-            }
-
-            const dir = fry.facingRight ? 1 : -1;
-
-            ctx.save();
-            ctx.translate(pos.x, pos.y);
-            ctx.scale(dir, 1);
-
-            // Тельце
-            ctx.fillStyle = "rgba(255,255,200,0.7)";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, size * 0.6, size * 0.3, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Хвостик
-            ctx.fillStyle = fry.color.body;
-            ctx.globalAlpha = 0.6;
-            ctx.beginPath();
-            ctx.moveTo(-size * 0.5, 0);
-            ctx.lineTo(-size * 1.0, -size * 0.25);
-            ctx.lineTo(-size * 1.0, size * 0.25);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1;
-
-            // Глаз
-            ctx.fillStyle = "#000";
-            ctx.beginPath();
-            ctx.arc(size * 0.3, -size * 0.05, size * 0.08, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.restore();
-        }
-
-        function drawCorpse(corpse) {
-            const pos = toScreen(corpse.x, corpse.y);
-            const size = corpse.size * scaleX;
-            const dir = corpse.facingRight ? 1 : -1;
-
-            const decomp = corpse.decomposition / 100;
-
-            ctx.save();
-            ctx.translate(pos.x, pos.y);
-            ctx.scale(dir, -1); // перевёрнута
-            ctx.globalAlpha = 1 - decomp * 0.5;
-
-            // Бледное тело
-            const gray = Math.floor(200 - decomp * 100);
-            ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
-            ctx.beginPath();
-            ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Хвост
-            ctx.fillStyle = `rgb(${gray - 30}, ${gray - 30}, ${gray - 30})`;
-            ctx.beginPath();
-            ctx.moveTo(-size * 0.5, 0);
-            ctx.lineTo(-size * 1.0, -size * 0.3);
-            ctx.lineTo(-size * 1.0, size * 0.3);
-            ctx.closePath();
-            ctx.fill();
-
-            // Глаз X_X
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(size * 0.4, -size * 0.15);
-            ctx.lineTo(size * 0.55, 0);
-            ctx.moveTo(size * 0.55, -size * 0.15);
-            ctx.lineTo(size * 0.4, 0);
-            ctx.stroke();
-
-            ctx.restore();
-        }
-
-        function drawTooltip(entity) {
-            const tooltip = document.getElementById("tooltip");
-            let html = "";
-
-            if (entity.type === "fish") {
-                const f = entity.data;
-                const spec = worldState.species[f.species];
-                const agePercent = (f.age / f.lifespan) * 100;
-
-                html = `
-                    <div class="tooltip-name" style="color: ${spec.color.body}">${f.name}</div>
-                    <div class="tooltip-species">${spec.name} (${spec.nameLatin}) ${f.gender === "male" ? "♂" : "♀"}</div>
-                    <div class="tooltip-stats">
-                        <span class="tooltip-label">Поколение:</span>
-                        <span class="tooltip-value">gen ${f.generation}</span>
-                        <span class="tooltip-label">Возраст:</span>
-                        <span class="tooltip-value">${Math.floor(f.age)} / ${f.lifespan} дней</span>
-                        <span class="tooltip-label">Размер:</span>
-                        <span class="tooltip-value">${f.size.toFixed(1)} мм</span>
-                        <span class="tooltip-label">Скорость:</span>
-                        <span class="tooltip-value">${f.speed.toFixed(2)}</span>
-                    </div>
-                    <div style="margin-top: 8px;">
-                        <div style="font-size: 11px; color: #888;">Энергия: ${Math.round(f.energy)}%</div>
-                        <div class="bar-mini bar-energy"><div class="bar-mini-fill" style="width: ${f.energy}%; background: #ffcc00;"></div></div>
-                    </div>
-                    <div>
-                        <div style="font-size: 11px; color: #888;">HP: ${Math.round(f.hp)}%</div>
-                        <div class="bar-mini bar-hp"><div class="bar-mini-fill" style="width: ${f.hp}%;"></div></div>
-                    </div>
-                    ${f.pregnant ? `<div style="margin-top: 6px; color: #ff69b4;">🤰 Беременна (${Math.floor(f.gestationLeft)} дн.)</div>` : ""}
-                    <div style="margin-top: 6px; font-size: 10px; color: #555;">Цель: ${f.targetType}</div>
-                `;
-            } else if (entity.type === "fry") {
-                const f = entity.data;
-                const spec = worldState.species[f.species];
-                html = `
-                    <div class="tooltip-name" style="color: #98fb98">👶 ${f.name}</div>
-                    <div class="tooltip-species">Малёк ${spec.name}</div>
-                    <div class="tooltip-stats">
-                        <span class="tooltip-label">Поколение:</span>
-                        <span class="tooltip-value">gen ${f.generation}</span>
-                        <span class="tooltip-label">Возраст:</span>
-                        <span class="tooltip-value">${Math.floor(f.growthDays)} / ${Math.floor(spec.maturity * 0.7)} дней</span>
-                        <span class="tooltip-label">Энергия:</span>
-                        <span class="tooltip-value">${Math.round(f.energy)}%</span>
-                    </div>
-                `;
-            }
-
-            tooltip.innerHTML = html;
-            tooltip.style.display = "block";
-            tooltip.style.left = (mouseX + 20) + "px";
-            tooltip.style.top = (mouseY - 10) + "px";
-
-            // Не выходим за пределы экрана
-            const rect = tooltip.getBoundingClientRect();
-            if (rect.right > window.innerWidth) {
-                tooltip.style.left = (mouseX - rect.width - 10) + "px";
-            }
-            if (rect.bottom > window.innerHeight) {
-                tooltip.style.top = (mouseY - rect.height) + "px";
-            }
-        }
-
-        // ====== МЫШЬ ======
-        canvas.addEventListener("mousemove", (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-        });
-
-        canvas.addEventListener("mouseleave", () => {
-            document.getElementById("tooltip").style.display = "none";
-        });
-
-        // ====== ЗАПУСК ======
-        setInterval(fetchState, 300);
-        fetchState();
-        requestAnimationFrame(draw);
-    </script>
+    }
+    if (spec.color.spots && fish.species === "cichlid") {
+        ctx.fillStyle = spec.color.spots;
+        ctx.beginPath();
+        ctx.arc(size * 0.3, -size * 0.1, size * 0.12, 0, Math.PI * 2);
+        ctx.arc(-size * 0.1, size * 0.15, size * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    if (spec.hasSword && fish.gender === "male") {
+        ctx.fillStyle = spec.color.sword || "#FFD700";
+        ctx.beginPath();
+        ctx.moveTo(-size * 1.1, 0); ctx.lineTo(-size * 2, size * 0.15); ctx.lineTo(-size * 1.1, size * 0.05);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // Плавники
+    ctx.fillStyle = spec.color.tail || spec.color.body;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.1, -size * 0.35);
+    ctx.quadraticCurveTo(size * 0.1, -size * 0.7, size * 0.3, -size * 0.4);
+    ctx.quadraticCurveTo(size * 0.2, -size * 0.35, -size * 0.1, -size * 0.35);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.35);
+    ctx.quadraticCurveTo(size * 0.15, size * 0.6, size * 0.25, size * 0.4);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Глаз
+    ctx.fillStyle = "#FFF";
+    ctx.beginPath(); ctx.arc(size * 0.45, -size * 0.08, size * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.arc(size * 0.47, -size * 0.08, size * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#FFF";
+    ctx.beginPath(); ctx.arc(size * 0.49, -size * 0.1, size * 0.03, 0, Math.PI * 2); ctx.fill();
+
+    if (fish.pregnant) {
+        ctx.fillStyle = "rgba(255,100,200,0.4)";
+        ctx.beginPath(); ctx.arc(-size * 0.1, size * 0.1, size * 0.25, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.restore();
+
+    if (fish.hp < 100) {
+        const bw = size * 1.5, bx = pos.x - bw / 2, by = pos.y - size - 10;
+        const pct = fish.hp / 100;
+        ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, bw, 4);
+        ctx.fillStyle = pct > 0.5 ? "#00ff88" : pct > 0.25 ? "#ffcc00" : "#ff4444";
+        ctx.fillRect(bx, by, bw * pct, 4);
+    }
+
+    if (size > 10) {
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = Math.max(8, size * 0.3) + "px 'Segoe UI'";
+        ctx.textAlign = "center";
+        ctx.fillText(fish.name, pos.x, pos.y - size - 12);
+    }
+}
+
+function drawFry(fry) {
+    const pos = toScreen(fry.x, fry.y);
+    const size = fry.size * scaleX;
+    const dx = mouseX - pos.x, dy = mouseY - pos.y;
+    if (dx * dx + dy * dy < (size + 8) * (size + 8)) hoveredEntity = { type: "fry", data: fry };
+
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.scale(fry.facingRight ? 1 : -1, 1);
+    ctx.fillStyle = "rgba(255,255,200,0.7)";
+    ctx.beginPath(); ctx.ellipse(0, 0, size * 0.6, size * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = fry.color.body; ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.5, 0); ctx.lineTo(-size, -size * 0.25); ctx.lineTo(-size, size * 0.25);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.arc(size * 0.3, -size * 0.05, size * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
+function drawCorpse(c) {
+    const pos = toScreen(c.x, c.y);
+    const size = c.size * scaleX;
+    const d = c.decomposition / 100;
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.scale(c.facingRight ? 1 : -1, -1);
+    ctx.globalAlpha = 1 - d * 0.5;
+    const g = Math.floor(200 - d * 100);
+    ctx.fillStyle = `rgb(${g},${g},${g})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, size * 0.8, size * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(${g-30},${g-30},${g-30})`;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.5, 0); ctx.lineTo(-size, -size * 0.3); ctx.lineTo(-size, size * 0.3);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(size * 0.4, -size * 0.15); ctx.lineTo(size * 0.55, 0);
+    ctx.moveTo(size * 0.55, -size * 0.15); ctx.lineTo(size * 0.4, 0);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawTooltip(entity) {
+    const tooltip = document.getElementById("tooltip");
+    let html = "";
+    if (entity.type === "fish") {
+        const f = entity.data;
+        const spec = worldState.species[f.species];
+        html = `
+            <div class="tooltip-name" style="color:${spec.color.body}">${f.name} ${f.gender === "male" ? "♂" : "♀"}</div>
+            <div class="tooltip-species">${spec.name} (${spec.nameLatin})</div>
+            <div class="tooltip-stats">
+                <span class="tooltip-label">Поколение:</span><span class="tooltip-value">gen ${f.generation}</span>
+                <span class="tooltip-label">Возраст:</span><span class="tooltip-value">${Math.floor(f.age)} / ${f.lifespan} дн.</span>
+                <span class="tooltip-label">Размер:</span><span class="tooltip-value">${f.size.toFixed(1)} мм</span>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:#888;">Энергия: ${Math.round(f.energy)}%</div>
+            <div class="bar-mini"><div class="bar-mini-fill" style="width:${Math.max(0,f.energy)}%;background:#ffcc00;"></div></div>
+            <div style="font-size:11px;color:#888;">HP: ${Math.round(f.hp)}%</div>
+            <div class="bar-mini"><div class="bar-mini-fill" style="width:${Math.max(0,f.hp)}%;background:#00ff88;"></div></div>
+            ${f.pregnant ? `<div style="margin-top:6px;color:#ff69b4;">🤰 Беременна (${Math.floor(f.gestationLeft)} дн.)</div>` : ""}`;
+    } else {
+        const f = entity.data;
+        const spec = worldState.species[f.species];
+        html = `
+            <div class="tooltip-name" style="color:#98fb98">👶 ${f.name}</div>
+            <div class="tooltip-species">Малёк ${spec.name}</div>
+            <div class="tooltip-stats">
+                <span class="tooltip-label">Поколение:</span><span class="tooltip-value">gen ${f.generation}</span>
+                <span class="tooltip-label">Возраст:</span><span class="tooltip-value">${Math.floor(f.growthDays)} дн.</span>
+            </div>`;
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+    tooltip.style.left = (mouseX + 20) + "px";
+    tooltip.style.top = (mouseY - 10) + "px";
+    const r = tooltip.getBoundingClientRect();
+    if (r.right > window.innerWidth) tooltip.style.left = (mouseX - r.width - 10) + "px";
+    if (r.bottom > window.innerHeight) tooltip.style.top = (mouseY - r.height) + "px";
+}
+
+canvas.addEventListener("mousemove", e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+// ============================================================
+// СТАРТ
+// ============================================================
+ensureServer();
+requestAnimationFrame(draw);
+</script>
 </body>
 </html>
