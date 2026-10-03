@@ -1,30 +1,9 @@
 {
   "name": "cytophage-world-server",
-  "version": "4.0.0",
-  "description": "24/7 Cytophage world simulation - Advanced version with improved physics, AI, and evolution",
+  "version": "5.0.0",
+  "description": "Persistent colony ecology with inherited traits and collective learning",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
-  "keywords": [
-    "simulation",
-    "evolution",
-    "bacteria",
-    "game",
-    "world",
-    "mutations",
-    "wars",
-    "ai",
-    "physics"
-  ],
-  "author": "Cytophage Team",
+  "scripts": {"start": "node server.js", "dev": "node server.js", "test": "node --test tests/*.test.js", "soak": "node tests/soak.js"},
   "license": "MIT",
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "engines": {"node": ">=22"}
 }
