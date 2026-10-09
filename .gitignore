@@ -1,9 +1,0 @@
-node_modules/
-.env
-.env.*
-!.env.example
-backup-original/
-world_state.json
-world_state.json.tmp
-world_state.json.invalid-*
-*.log
