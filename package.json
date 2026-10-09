@@ -1,1 +1,0 @@
-{"name":"cytophage-world-server","version":"6.0.0","description":"Autonomous evolving microbial societies","main":"server.js","scripts":{"start":"node server.js","dev":"node server.js","test":"node --test tests/*.test.js","soak":"node tests/soak.js"},"license":"MIT","engines":{"node":">=22"}}
